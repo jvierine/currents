@@ -10,8 +10,8 @@ const url=process.env.CURRENTS_URL||'http://127.0.0.1:8163/';
    page.on('pageerror',e=>errors.push(String(e)));
    await page.goto(url);
    await page.waitForFunction(()=>document.querySelector('#selected').textContent.includes('illustrative current'));
-   assert(await page.getByText('R1 has two distinct magnetospheric routes',{exact:false}).count()>0);
-   for(const layer of ['Region 1 FAC','R1 · dayside boundary path (opposes CF)','R1 · far-tail plasma-sheet path','R1 · polar-cap Pedersen closure']){
+   assert(await page.getByText('two alternative magnetospheric closure paths',{exact:false}).count()>0);
+   for(const layer of ['Region 1 FAC sheet','R1 path 1 · direct to magnetopause','R1 path 2 · plasma sheet + boundary return','R1 · shared ionospheric closure']){
     await page.getByLabel(layer,{exact:true}).uncheck();
     await page.getByLabel(layer,{exact:true}).check();
    }

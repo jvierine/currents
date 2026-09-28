@@ -35,10 +35,10 @@ for preset in d['presets']:
     assert max(np.linalg.norm(ends-start,axis=1).min() for start in starts)<3e-6
     for hem in [1,-1]:
         r1paths=[p for p in preset['paths'] if p.get('hemisphere')==hem]
-        dayside=[np.array(p['points']) for p in r1paths if p.get('segment')=='dayside-magnetopause']
-        far_tail=[np.array(p['points']) for p in r1paths if p.get('segment')=='far-tail-plasma-sheet']
-        polar=[np.array(p['points']) for p in r1paths if p.get('segment')=='polar-cap-pedersen']
-        assert (len(dayside),len(far_tail),len(polar))==(2,1,3)
+        dayside=[np.array(p['points']) for p in r1paths if p.get('segment')=='direct-to-magnetopause']
+        far_tail=[np.array(p['points']) for p in r1paths if p.get('segment')=='far-tail-plasma-sheet-and-boundary-return']
+        polar=[np.array(p['points']) for p in r1paths if p.get('segment')=='shared-ionospheric-closure']
+        assert (len(dayside),len(far_tail),len(polar))==(1,1,1)
         for cap in polar:
             assert np.max(np.abs(np.linalg.norm(cap,axis=1)-1.02))<2e-6
             assert cap[0,1]<0 and cap[-1,1]>0 # dawn-to-dusk closure
@@ -69,9 +69,14 @@ for preset in d['presets']:
             u=np.sum(((p-center)/axes)**2,axis=1)
             assert np.max(u)<=1.001
             if path['kind']=='r1dayside':
-                assert np.max(u)>.98 and np.max(p[:,0])>=5.99
-                assert p[len(p)//4,1]>p[3*len(p)//4,1] # dusk-to-dawn, opposite CF
-            else:assert np.min(p[:,0])<=-22.99 and np.min(np.abs(p[:,2]))<1
+                assert np.max(u)>.96 and np.max(p[:,0])>=5.99
+            else:
+                # Figure 4: outward near the plasma sheet, around the far-tail
+                # edge, then earthward on the high-latitude magnetopause.
+                assert np.min(p[:,0])<=-23.99 and np.min(np.abs(p[:,2]))<1
+                far=np.argmin(p[:,0])
+                assert np.max(np.abs(p[far:,2]))>15
+                assert p[0,0]>p[far,0] and p[-1,0]>p[far,0]
     current=preset['current_density_xz'];x=np.asarray(current['x']);z=np.asarray(current['z']);jy=np.asarray(current['jy'])
     assert np.isfinite(jy).all() and current['units']=='nA/m^2'
     # Cross-tail conventional current is dawn-to-dusk (+Y) near midnight.
