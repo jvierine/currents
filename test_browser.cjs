@@ -10,8 +10,8 @@ const url=process.env.CURRENTS_URL||'http://127.0.0.1:8163/';
    page.on('pageerror',e=>errors.push(String(e)));
    await page.goto(url);
    await page.waitForFunction(()=>document.querySelector('#selected').textContent.includes('illustrative current'));
-   assert(await page.getByText('The alternative direct-to-magnetopause R1 path is not displayed',{exact:false}).count()>0);
-   for(const layer of ['R1 · plasma sheet + boundary return','R1 · ionospheric closure']){
+   assert(await page.getByText('Region 1 does not self-close across the polar cap',{exact:false}).count()>0);
+   for(const layer of ['Region 1 FAC','R1 · high-latitude boundary closure','R1 ↔ R2 Pedersen closure']){
     await page.getByLabel(layer,{exact:true}).uncheck();
     await page.getByLabel(layer,{exact:true}).check();
    }

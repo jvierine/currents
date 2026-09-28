@@ -25,16 +25,16 @@ measurements are plotted.
 Included: R1/R2 FAC in both hemispheres, Pedersen connectors, partial/symmetric
 ring current, and cross-tail current whose return is on the T96 magnetopause.
 Chapman-Ferraro shielding and the tail return share one boundary-current layer.
-R1 no longer disappears at the magnetic equator. Following the far-tail path
-in Figure 4 of Ganushkina et al. (2018), it connects directly to both
-ionospheric footpoints, sweeps tailward symmetrically, travels antisunward in
-the plasma sheet, turns over the far-tail edge, and returns earthward on the
-high-latitude magnetopause. The alternative direct-to-magnetopause R1 route is
-not displayed. The equatorial line is cross-tail current; Chapman-Ferraro
-return streamlines are shown only at high latitude. Their north/south cusp
-centers are registered to the Jy sign reversals measured on the same T96 X-Z
-boundary sheet. The R1 path is schematic because tracing B does not uniquely
-solve its perpendicular closure. See
+R1 no longer disappears at the magnetic equator or self-closes across the
+polar cap. Following the red Region 1 system in Figure 7 of Ganushkina et al.
+(2018), the dusk and dawn R1 FACs join through a schematic high-latitude
+Chapman-Ferraro/tail-boundary transition. At dawn and dusk, ionospheric
+Pedersen segments connect R1 to R2. R2 joins the partial ring current, so the
+R1 and R2 systems form one continuous circuit. This is the explicit topology:
+R1 dusk FAC -> high-latitude boundary -> R1 dawn FAC -> dawn Pedersen -> R2
+dawn FAC -> partial ring -> R2 dusk FAC -> dusk Pedersen -> R1 dusk FAC.
+The perpendicular R1 branch is schematic because tracing B does not uniquely
+solve generator-region current closure. See
 https://doi.org/10.1002/2017RG000590.
 Included additionally: an equivalent substorm wedge in both hemispheres, with
 T96-traced upward premidnight and downward postmidnight FAC, a westward auroral

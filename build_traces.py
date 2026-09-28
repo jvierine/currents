@@ -130,8 +130,10 @@ def generate(name, pressure, dst, by, bz, tilt):
         section=np.sqrt(max(0.,1-((x-bc[0])/ba[0])**2))
         return np.array([x,scale*ba[1]*section*np.cos(phi),
                          hem*scale*ba[2]*section*np.sin(phi)])
-    # R2 joins the partial ring current.  R1 continues through a schematic
-    # boundary/plasma-sheet generator route instead of stopping at z=0.
+    # R1 and R2 are one connected circuit here.  R1 closes magnetospherically
+    # through the high-latitude Chapman-Ferraro/tail transition; R2 closes
+    # through the partial ring current.  Dawn/dusk Pedersen segments connect
+    # the two FAC systems in the ionosphere (Ganushkina et al. 2018, Figs 4,7).
     for hem in [1,-1]:
         for dusk in [18]:
             dawn=24-dusk
@@ -142,10 +144,7 @@ def generate(name, pressure, dst, by, bz, tilt):
                     assert stop=='equator', (name,hem,region,mlt,stop)
                     legs[region,side]=p
                     upward=(region=='r1')==(side=='dusk')
-                    # R1 is drawn below as one continuous far-tail circuit that
-                    # reaches the ionosphere itself.  R2 retains its T96 FACs.
-                    if region=='r2':
-                        add(region,p if upward else p[::-1],f'{region.upper()} · {side} · '+('upward' if upward else 'downward')+' conventional current',termination=stop)
+                    add(region,p if upward else p[::-1],f'{region.upper()} · {side} · '+('upward' if upward else 'downward')+' conventional current',termination=stop,hemisphere=hem,side=side)
             # Smooth radial/polar interpolation in SM equatorial plane.
             for kind,start,end,via in [('partial',legs['r2','dawn'][-1],legs['r2','dusk'][-1],'night')]:
                 a,b=rot.T@start,rot.T@end
@@ -154,37 +153,26 @@ def generate(name, pressure, dst, by, bz, tilt):
                 t=np.linspace(0,1,120); th=th0+(th1-th0)*t
                 rr=(1-t)*np.linalg.norm(a)+t*np.linalg.norm(b)
                 pts=np.column_stack([rr*np.cos(th),rr*np.sin(th),np.zeros(len(t))])@rot.T
-                add(kind,pts,'Schematic partial ring-current closure')
-            # Retain the Figure 4 far-tail route only.  It is a single complete
-            # R1 path between ionospheric footpoints, with no separate FAC seam
-            # at the magnetic equator and no imposed dawn/dusk displacement in
-            # the magnetosphere.  Small mirrored Y offsets near Earth make the
-            # two ionospheric connections readable; both sweep tailward equally.
+                add(kind,pts,'Schematic partial ring-current closure',hemisphere=hem,segment='region-2-partial-ring')
+            # Red Region 1 branch in Figure 7: from the upward dusk R1 leg,
+            # through the high-latitude boundary-current region, to the
+            # downward dawn R1 leg.  This is a schematic generator closure;
+            # its endpoints are the T96-traced FAC endpoints and all interior
+            # waypoints remain inside the same displayed magnetopause.
             if dusk==18:
-                dusk_foot=legs['r1','dusk'][0]
-                dawn_foot=legs['r1','dawn'][0]
-                def top(x,scale=.985): return mp_point(x,np.pi/2,hem,scale)
-                far=[dusk_foot,[-1.8,.45*dusk_foot[1],hem*2.2],
-                     [-4.5,0.,hem*.85],[-10.,0.,hem*.22],[-18.,0.,hem*.12],
-                     [-24.,0.,0.],[-24.,0.,hem*6.],top(-24.)]
-                far += [top(x) for x in (-20.,-16.,-12.,-8.,-4.)]
-                far += [[-2.8,0.,hem*4.2],[-1.8,.45*dawn_foot[1],hem*2.2],dawn_foot]
-                route=smooth_route(far,321)
-                route[route[:,0]<-3.,1]=0. # exact noon-midnight symmetry outside the entry bends
-                add('r1tail',route,
-                    'R1 Figure 4 far-tail route: ionosphere to plasma sheet, around the far tail, boundary return to ionosphere',
-                    hemisphere=hem,segment='ionosphere-plasma-sheet-far-tail-boundary-ionosphere')
-
-                # Ionospheric closure of the single far-tail R1 circuit.
-                pole=hem*axis*1.02;cap=[]
-                for a,b in [(dawn_foot,pole),(pole,dusk_foot)]:
-                    for tt in np.linspace(0,1,45,endpoint=False):
-                        q=(1-tt)*a+tt*b;cap.append(1.02*q/np.linalg.norm(q))
-                cap.append(dusk_foot)
-                add('r1pedersen',cap,'R1 ionospheric closure: dawn to dusk',
-                    hemisphere=hem,segment='ionospheric-closure')
+                start,end=legs['r1','dusk'][-1],legs['r1','dawn'][-1]
+                route=[start,mp_point(-6.,.78,hem),mp_point(-2.,.84,hem),
+                       mp_point(3.,1.02,hem),mp_point(6.,np.pi/2,hem),
+                       mp_point(3.,np.pi-1.02,hem),mp_point(-2.,np.pi-.84,hem),
+                       mp_point(-6.,np.pi-.78,hem),end]
+                add('r1boundary',smooth_route(route,321),
+                    'Region 1 high-latitude boundary closure (red branch in Ganushkina et al. Figure 7)',
+                    hemisphere=hem,segment='high-latitude-boundary-closure')
             for mlt,l0,l1 in [(dawn,70,63),(dusk,63,70)]:
-                add('pedersen',[seed(hem*l,mlt) for l in np.linspace(l0,l1,35)],'Ionospheric Pedersen closure (schematic)')
+                side='dawn' if mlt==dawn else 'dusk'
+                add('pedersen',[seed(hem*l,mlt) for l in np.linspace(l0,l1,35)],
+                    f'{side.title()} Pedersen closure connecting Region 1 and Region 2',
+                    hemisphere=hem,side=side,segment='r1-r2-ionospheric-closure')
     # Equivalent substorm wedge: upward west/premidnight, downward east/
     # postmidnight, westward ionospheric and eastward equatorial closure.
     # T96 only supplies the FAC geometry, not substorm dynamics or amplitudes.

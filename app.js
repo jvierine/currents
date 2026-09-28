@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
 const $=s=>document.querySelector(s), viewport=$('#viewport');
-const defs={field:['Magnetic field lines','#426477'],r1tail:['R1 · plasma sheet + boundary return','#ff8f72'],r1pedersen:['R1 · ionospheric closure','#fff0a8'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1/R2 Pedersen closure','#f6e8a5'],partial:['Partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + high-latitude Chapman-Ferraro return','#73a9ff']};
+const defs={field:['Magnetic field lines','#426477'],r1:['Region 1 FAC','#ff5b63'],r1boundary:['R1 · high-latitude boundary closure','#ff5b63'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1 ↔ R2 Pedersen closure','#f6e8a5'],partial:['Region 2 + partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + high-latitude Chapman-Ferraro return','#73a9ff']};
 defs.wedge=['Substorm wedge FAC + tail','#ff835c'];
 defs.electrojet=['Auroral westward electrojet','#a5f575'];
 defs.magnetopause=['Magnetopause surface','#76969f'];
@@ -62,12 +62,12 @@ function build(index){
     for(let j=0;j<columns-1;j+=8)groups.magnetopause.add(line(Array.from({length:rows},(_,i)=>points[i*columns+j]),defs.magnetopause[1],.22));
   }
   for(const path of p.paths){if(!defs[path.kind])continue;const color=defs[path.kind][1],pts=path.points.map(a=>new THREE.Vector3(...a));
-    const southern=path.hemisphere===-1||(['r1','r1dayside','r1tail','r1pedersen','r2','pedersen'].includes(path.kind)&&pts[Math.floor(pts.length/2)].z<0);
+    const southern=path.hemisphere===-1||(['r1','r1boundary','r2','pedersen'].includes(path.kind)&&pts[Math.floor(pts.length/2)].z<0);
     const object=line(path.points,color,path.kind==='field'?.30:.9);object.userData={label:path.label,south:southern};groups[path.kind].add(object);
     if(path.kind==='bcbf'){object.material.dispose();object.material=new THREE.LineDashedMaterial({color,dashSize:.022,gapSize:.014});object.computeLineDistances();}
     if(path.kind==='field')continue;pickables.push(object);
     const lengths=[0];for(let i=1;i<pts.length;i++)lengths.push(lengths[i-1]+pts[i].distanceTo(pts[i-1]));
-    const ionospheric=['pedersen','r1pedersen','electrojet','bcbf'].includes(path.kind);
+    const ionospheric=['pedersen','electrojet','bcbf'].includes(path.kind);
     const count=ionospheric?(path.kind==='pedersen'?1:3):Math.max(2,Math.ceil(lengths.at(-1)/3));
     for(let i=0;i<count;i++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(ionospheric?.018:.07,ionospheric?.07:.25,7),new THREE.MeshBasicMaterial({color}));arrow.userData.south=southern;groups[path.kind].add(arrow);animated.push({arrow,pts,lengths,offset:i/count});}
   }

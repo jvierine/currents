@@ -35,17 +35,22 @@ for preset in d['presets']:
     assert max(np.linalg.norm(ends-start,axis=1).min() for start in starts)<3e-6
     for hem in [1,-1]:
         r1paths=[p for p in preset['paths'] if p.get('hemisphere')==hem]
-        far_tail=[np.array(p['points']) for p in r1paths if p.get('segment')=='ionosphere-plasma-sheet-far-tail-boundary-ionosphere']
-        polar=[np.array(p['points']) for p in r1paths if p.get('segment')=='ionospheric-closure']
-        assert not any(p['kind'] in ['r1','r1dayside'] for p in r1paths)
-        assert (len(far_tail),len(polar))==(1,1)
-        for cap in polar:
-            assert np.max(np.abs(np.linalg.norm(cap,axis=1)-1.02))<2e-6
-            assert cap[0,1]<0 and cap[-1,1]>0 # dawn-to-dusk closure
-        route=far_tail[0]
-        assert np.max(np.abs(np.linalg.norm(route[[0,-1]],axis=1)-1.02))<2e-6
-        assert route[0,1]>0 and route[-1,1]<0
-        assert np.max(np.abs(route[route[:,0]<-3,1]))<2e-6 # no dawn/dusk displacement
+        assert not any(p['kind']=='r1pedersen' for p in r1paths)
+        r1={p['side']:np.array(p['points']) for p in r1paths if p['kind']=='r1'}
+        r2={p['side']:np.array(p['points']) for p in r1paths if p['kind']=='r2'}
+        ped={p['side']:np.array(p['points']) for p in r1paths if p['kind']=='pedersen'}
+        boundary=[np.array(p['points']) for p in r1paths if p['kind']=='r1boundary']
+        partial=[np.array(p['points']) for p in r1paths if p['kind']=='partial']
+        assert set(r1)==set(r2)==set(ped)=={'dawn','dusk'}
+        assert len(boundary)==len(partial)==1
+        boundary,partial=boundary[0],partial[0]
+        # One complete R1-R2 loop, with no separate polar-cap R1 closure.
+        sequence=[r1['dusk'],boundary,r1['dawn'],ped['dawn'],r2['dawn'],partial,r2['dusk'],ped['dusk']]
+        for first,second in zip(sequence,sequence[1:]+sequence[:1]):
+            assert np.linalg.norm(first[-1]-second[0])<3e-6
+        assert boundary[0,1]>0 and boundary[-1,1]<0
+        assert np.max(boundary[:,0])>5 # dayside high-latitude Figure 7 branch
+        assert np.max(hem*boundary[:,2])>8
         wedge={p['segment']:np.array(p['points']) for p in preset['paths'] if p.get('hemisphere')==hem and p.get('segment') in ['upward','downward','electrojet','tail-closure']}
         assert set(wedge)=={'upward','downward','electrojet','tail-closure'}
         up,down,jet,tail=[wedge[k] for k in ['upward','downward','electrojet','tail-closure']]
@@ -69,15 +74,10 @@ for preset in d['presets']:
             assert path['quantity']=='plasma-flow'
             assert np.max(np.abs(np.linalg.norm(p,axis=1)-1.02))<2e-6
             assert np.sign(p[len(p)//2,2])==path['hemisphere']
-        if path['kind']=='r1tail':
+        if path['kind']=='r1boundary':
             u=np.sum(((p-center)/axes)**2,axis=1)
             assert np.max(u)<=1.001
-            # Figure 4: outward near the plasma sheet, around the far-tail
-            # edge, then earthward on the high-latitude magnetopause.
-            assert np.min(p[:,0])<=-23.99 and np.min(np.abs(p[:,2]))<1
-            far=np.argmin(p[:,0])
-            assert np.max(np.abs(p[far:,2]))>15
-            assert p[0,0]>p[far,0] and p[-1,0]>p[far,0]
+            assert np.max(p[:,0])>5 and np.max(path['hemisphere']*p[:,2])>8
     assert sum(p['label'].startswith('Chapman-Ferraro /') for p in preset['paths'])==6
     current=preset['current_density_xz'];x=np.asarray(current['x']);z=np.asarray(current['z']);jy=np.asarray(current['jy'])
     assert np.isfinite(jy).all() and current['units']=='nA/m^2'
