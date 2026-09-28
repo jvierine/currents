@@ -35,13 +35,17 @@ for preset in d['presets']:
     assert max(np.linalg.norm(ends-start,axis=1).min() for start in starts)<3e-6
     for hem in [1,-1]:
         r1paths=[p for p in preset['paths'] if p.get('hemisphere')==hem]
-        dayside=[np.array(p['points']) for p in r1paths if p.get('segment')=='direct-to-magnetopause']
-        far_tail=[np.array(p['points']) for p in r1paths if p.get('segment')=='far-tail-plasma-sheet-and-boundary-return']
-        polar=[np.array(p['points']) for p in r1paths if p.get('segment')=='shared-ionospheric-closure']
-        assert (len(dayside),len(far_tail),len(polar))==(1,1,1)
+        far_tail=[np.array(p['points']) for p in r1paths if p.get('segment')=='ionosphere-plasma-sheet-far-tail-boundary-ionosphere']
+        polar=[np.array(p['points']) for p in r1paths if p.get('segment')=='ionospheric-closure']
+        assert not any(p['kind'] in ['r1','r1dayside'] for p in r1paths)
+        assert (len(far_tail),len(polar))==(1,1)
         for cap in polar:
             assert np.max(np.abs(np.linalg.norm(cap,axis=1)-1.02))<2e-6
             assert cap[0,1]<0 and cap[-1,1]>0 # dawn-to-dusk closure
+        route=far_tail[0]
+        assert np.max(np.abs(np.linalg.norm(route[[0,-1]],axis=1)-1.02))<2e-6
+        assert route[0,1]>0 and route[-1,1]<0
+        assert np.max(np.abs(route[route[:,0]<-3,1]))<2e-6 # no dawn/dusk displacement
         wedge={p['segment']:np.array(p['points']) for p in preset['paths'] if p.get('hemisphere')==hem and p.get('segment') in ['upward','downward','electrojet','tail-closure']}
         assert set(wedge)=={'upward','downward','electrojet','tail-closure'}
         up,down,jet,tail=[wedge[k] for k in ['upward','downward','electrojet','tail-closure']]
@@ -65,20 +69,24 @@ for preset in d['presets']:
             assert path['quantity']=='plasma-flow'
             assert np.max(np.abs(np.linalg.norm(p,axis=1)-1.02))<2e-6
             assert np.sign(p[len(p)//2,2])==path['hemisphere']
-        if path['kind'] in ['r1dayside','r1tail']:
+        if path['kind']=='r1tail':
             u=np.sum(((p-center)/axes)**2,axis=1)
             assert np.max(u)<=1.001
-            if path['kind']=='r1dayside':
-                assert np.max(u)>.96 and np.max(p[:,0])>=5.99
-            else:
-                # Figure 4: outward near the plasma sheet, around the far-tail
-                # edge, then earthward on the high-latitude magnetopause.
-                assert np.min(p[:,0])<=-23.99 and np.min(np.abs(p[:,2]))<1
-                far=np.argmin(p[:,0])
-                assert np.max(np.abs(p[far:,2]))>15
-                assert p[0,0]>p[far,0] and p[-1,0]>p[far,0]
+            # Figure 4: outward near the plasma sheet, around the far-tail
+            # edge, then earthward on the high-latitude magnetopause.
+            assert np.min(p[:,0])<=-23.99 and np.min(np.abs(p[:,2]))<1
+            far=np.argmin(p[:,0])
+            assert np.max(np.abs(p[far:,2]))>15
+            assert p[0,0]>p[far,0] and p[-1,0]>p[far,0]
+    assert sum(p['label'].startswith('Chapman-Ferraro /') for p in preset['paths'])==6
     current=preset['current_density_xz'];x=np.asarray(current['x']);z=np.asarray(current['z']);jy=np.asarray(current['jy'])
     assert np.isfinite(jy).all() and current['units']=='nA/m^2'
+    assert (x[0],x[-1],z[0],z[-1])==(-27.,13.,-30.,30.)
+    rr=np.hypot(z[:,None],x[None,:]);assert np.max(np.abs(jy[rr<5]))==0
+    zeros=preset['magnetopause']['current_zero_crossings']
+    assert set(zeros)=={'-1','1'}
+    for hem in (-1,1):
+        q=np.asarray(zeros[str(hem)]);assert np.sign(q[2])==hem and 5<q[0]<9
     # Cross-tail conventional current is dawn-to-dusk (+Y) near midnight.
     tail=jy[np.argmin(abs(z)),np.argmin(abs(x+15))]
     assert tail>0,(preset['name'],tail)

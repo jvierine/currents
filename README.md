@@ -14,25 +14,27 @@ Background field traces terminate at Earth, 25 RE, or 85 RE arc length.
 FAC legs terminate at the magnetic equator and preserve their full 3-D geometry.
 Seed positions, tilt and model inputs are in the generator, not inferred from data.
 The optional GSM X-Z diagnostic evaluates Jy=(dBx/dz-dBz/dx)/mu0 from the
-displayed model on Y=0. It is disabled by default. The inner 2 RE are masked;
-outside the displayed T96 magnetopause B is set to zero so the boundary sheet
-is included in the curl. Red is +Y (dusk), blue is -Y (dawn), in nA/m^2.
+displayed model on Y=0. It is disabled by default and spans X=-27..13 RE and
+Z=-30..30 RE. The inner 5 RE are excluded because the internal-field curl is
+not a magnetospheric current system. Outside the displayed T96 magnetopause B
+is set to zero so the boundary sheet is included in the curl. Red is +Y
+(dusk), blue is -Y (dawn), in nA/m^2.
 The colored line circuits remain illustrative; no conductances or observed
 measurements are plotted.
 
 Included: R1/R2 FAC in both hemispheres, Pedersen connectors, partial/symmetric
 ring current, and cross-tail current whose return is on the T96 magnetopause.
 Chapman-Ferraro shielding and the tail return share one boundary-current layer.
-R1 no longer disappears at the magnetic equator. Following Figure 4 of
-Ganushkina et al. (2018), the same representative R1 sheet has two explicitly
-labeled alternative magnetospheric paths: (1) a compact open-field connection
-directly through the dayside magnetopause/solar-wind generator and (2) a long
-closed-field route that travels antisunward in the plasma sheet, turns around
-the far-tail edge, and returns earthward on the high-latitude magnetopause.
-The ionospheric segment is shared by either alternative. The second path is not
-a dusk-to-dawn bridge at one X location. These perpendicular paths are
-schematic because tracing B does not uniquely solve them, and the visualization
-does not claim that R1 simply merges into Chapman-Ferraro current. See
+R1 no longer disappears at the magnetic equator. Following the far-tail path
+in Figure 4 of Ganushkina et al. (2018), it connects directly to both
+ionospheric footpoints, sweeps tailward symmetrically, travels antisunward in
+the plasma sheet, turns over the far-tail edge, and returns earthward on the
+high-latitude magnetopause. The alternative direct-to-magnetopause R1 route is
+not displayed. The equatorial line is cross-tail current; Chapman-Ferraro
+return streamlines are shown only at high latitude. Their north/south cusp
+centers are registered to the Jy sign reversals measured on the same T96 X-Z
+boundary sheet. The R1 path is schematic because tracing B does not uniquely
+solve its perpendicular closure. See
 https://doi.org/10.1002/2017RG000590.
 Included additionally: an equivalent substorm wedge in both hemispheres, with
 T96-traced upward premidnight and downward postmidnight FAC, a westward auroral

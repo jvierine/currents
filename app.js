@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
 const $=s=>document.querySelector(s), viewport=$('#viewport');
-const defs={field:['Magnetic field lines','#426477'],r1:['Region 1 FAC sheet','#ffb85b'],r1dayside:['R1 path 1 · direct to magnetopause','#ffd36e'],r1tail:['R1 path 2 · plasma sheet + boundary return','#ff8f72'],r1pedersen:['R1 · shared ionospheric closure','#fff0a8'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1/R2 Pedersen closure','#f6e8a5'],partial:['Partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + Chapman-Ferraro boundary return','#73a9ff']};
+const defs={field:['Magnetic field lines','#426477'],r1tail:['R1 · plasma sheet + boundary return','#ff8f72'],r1pedersen:['R1 · ionospheric closure','#fff0a8'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1/R2 Pedersen closure','#f6e8a5'],partial:['Partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + high-latitude Chapman-Ferraro return','#73a9ff']};
 defs.wedge=['Substorm wedge FAC + tail','#ff835c'];
 defs.electrojet=['Auroral westward electrojet','#a5f575'];
 defs.magnetopause=['Magnetopause surface','#76969f'];
@@ -37,7 +37,7 @@ function buildCurrentPlane(c,magnetopause){
   for(let iz=0;iz<nz;iz++)for(let ix=0;ix<nx;ix++){
     const xx=c.x[ix],zz=c.z[iz],k=4*(iz*nx+ix),[r,g,b]=seismic(c.jy[iz][ix]/vmax),radius=Math.hypot(xx,zz);
     const inside=((xx-center[0])/axes[0])**2+(zz/axes[2])**2<=1;
-    pixels[k]=r;pixels[k+1]=g;pixels[k+2]=b;pixels[k+3]=inside&&radius>=2?195:0;
+    pixels[k]=r;pixels[k+1]=g;pixels[k+2]=b;pixels[k+3]=inside&&radius>=5?195:0;
   }
   const texture=new THREE.DataTexture(pixels,nx,nz,THREE.RGBAFormat);texture.magFilter=THREE.NearestFilter;texture.minFilter=THREE.NearestFilter;texture.needsUpdate=true;
   const geometry=new THREE.PlaneGeometry(c.x.at(-1)-c.x[0],c.z.at(-1)-c.z[0]);
@@ -83,4 +83,4 @@ const ray=new THREE.Raycaster();ray.params.Line.threshold=.12;let down;
 renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=renderer.domElement.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);const hit=ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible))[0];if(hit)$('#selected').textContent=hit.object.userData.label;});
 function resize(){const w=viewport.clientWidth,h=viewport.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();view('global');
 let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(playing)phase=(phase+dt*.045)%1;controls.update();for(const a of animated)positionArrow(a);for(const l of labels){const p=l.p.clone().project(camera);l.el.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;l.el.style.left=`${(p.x+1)*viewport.clientWidth/2}px`;l.el.style.top=`${(1-p.y)*viewport.clientHeight/2}px`;}renderer.render(scene,camera);requestAnimationFrame(frame);}requestAnimationFrame(frame);
-fetch('./traces.json?v=r1-figure4-2').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});
+fetch('./traces.json?v=cusp-jy-mask5-4').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});

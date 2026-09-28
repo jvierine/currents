@@ -7,10 +7,11 @@ conductance, reconnection or substorm dynamics is inferred.
 """
 import numpy as np
 from scipy.integrate import solve_ivp
+from scipy.optimize import brentq
 from geopack import t96
 
 
-def boundary_systems(pressure, tilt):
+def boundary_systems(pressure, tilt, cusp_points=None, geometry_only=False):
     ps=np.deg2rad(tilt)
     rot=np.array([[np.cos(ps),0,np.sin(ps)],[0,1,0],[-np.sin(ps),0,np.cos(ps)]])
     axis=rot[:,2]
@@ -22,16 +23,56 @@ def boundary_systems(pressure, tilt):
     phi=np.linspace(0,2*np.pi,65)
     surface=np.array([center+axes*np.array([np.cos(t),np.sin(t)*np.cos(f),np.sin(t)*np.sin(f)]) for t in theta for f in phi])
 
-    def direction(p):
+    boundary=dict(points=np.round(surface,6).tolist(),rows=len(theta),columns=len(phi),
+                  model='T96 sigma=1.08 magnetopause; clipped at GSM X=-25 RE',
+                  center=center.tolist(),axes=axes.tolist())
+    if geometry_only:return boundary,[]
+
+    def raw_current(p):
         n=(p-center)/axes**2;n/=np.linalg.norm(n)
         r=np.linalg.norm(p)
         dipole=30500/r**3*(axis-3*np.dot(axis,p)*p/r**2)
         shielding=np.array(t96.dipshld(ps,*(p*scale)))*scale**3
-        current=np.cross(dipole+shielding,n)
+        return np.cross(dipole+shielding,n)
+
+    # The analytic shielding streamline field has a cusp reversal displaced
+    # from the zero crossing in the full displayed T96 Jy cut.  Warp only the
+    # local current-direction sampling coordinates so its stagnation point is
+    # registered to that measured crossing (typically a 2-3 RE correction).
+    analytic={}
+    for hem in (-1,1):
+        def ky(z):
+            x=center[0]+axes[0]*np.sqrt(max(0.,1-(z/axes[2])**2))
+            return raw_current(np.array([x,0.,z]))[1]
+        lo,hi=(4.,min(15.,.9*axes[2]))
+        if hem<0:lo,hi=-hi,-lo
+        z0=brentq(ky,lo,hi)
+        x0=center[0]+axes[0]*np.sqrt(max(0.,1-(z0/axes[2])**2))
+        analytic[hem]=np.array([x0,0.,z0])
+
+    def direction(p):
+        n=(p-center)/axes**2;n/=np.linalg.norm(n)
+        q=p
+        if cusp_points:
+            hem=1 if p[2]>=0 else -1
+            target=np.asarray(cusp_points[hem]);delta=target-analytic[hem]
+            weight=np.exp(-(np.linalg.norm(p-target)/8.)**2)
+            q=p-weight*delta
+        current=raw_current(q)
+        current-=np.dot(current,n)*n
         return current/max(np.linalg.norm(current),1e-12)
 
     paths=[]
-    for z in [-10,-7,-4,0,4,7,10]:
+    # High-latitude Chapman-Ferraro return streamlines only.  The equatorial
+    # Y-directed current displayed elsewhere is the cross-tail current, not a
+    # separate equatorial Chapman-Ferraro line.
+    seed_z=[]
+    for hem in (-1,1):
+        cusp_z=abs(cusp_points[hem][2]) if cusp_points else 10.
+        # Do not seed exactly at the zero-current stagnation point: that
+        # physical point has no defined streamline direction.
+        seed_z.extend(hem*cusp_z*np.array([.90,.65,.40]))
+    for z in sorted(seed_z):
         seed=np.array([center[0]+axes[0]*np.sqrt(1-(z/axes[2])**2),0.,z])
         def stop(s,p):return p[0]+25
         stop.terminal=True;stop.direction=-1
@@ -58,6 +99,4 @@ def boundary_systems(pressure, tilt):
                 points=1.02*np.column_stack([np.cos(lat)*np.cos(lon),np.cos(lat)*np.sin(lon),np.full(len(lon),np.sin(lat))])@rot.T
                 paths.append(dict(kind='bcbf',points=np.round(points,6).tolist(),hemisphere=hemisphere,
                     quantity='plasma-flow',label=f'BCBF: {side} ExB plasma drift, schematic R1/R2 boundary channel'))
-    return dict(points=np.round(surface,6).tolist(),rows=len(theta),columns=len(phi),
-                model='T96 sigma=1.08 magnetopause; clipped at GSM X=-25 RE',
-                center=center.tolist(),axes=axes.tolist()),paths
+    return boundary,paths

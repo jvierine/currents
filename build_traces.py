@@ -24,7 +24,8 @@ def current_density_xz(field, magnetopause):
     jump at that surface is therefore part of the numerical curl rather than
     being replaced by a disconnected illustrative current.
     """
-    x=np.linspace(-24.5,12.0,147);z=np.linspace(-15.0,15.0,121)
+    # Cover the full displayed T96 boundary/tail scene at 0.25 RE spacing.
+    x=np.linspace(-27.0,13.0,161);z=np.linspace(-30.0,30.0,241)
     bx=np.zeros((len(z),len(x)));bz=np.zeros_like(bx)
     center=np.asarray(magnetopause['center']);axes=np.asarray(magnetopause['axes'])
     inside=np.zeros_like(bx,dtype=bool)
@@ -32,16 +33,42 @@ def current_density_xz(field, magnetopause):
         for ix,xx in enumerate(x):
             p=np.array([xx,0.,zz]);r=np.linalg.norm(p)
             within=np.sum(((p-center)/axes)**2)<=1
-            if within and r>=1.05:
+            if within and r>=5.0:
                 b=field(p);bx[iz,ix],bz[iz,ix]=b[0],b[2];inside[iz,ix]=True
     # B is in nT and distance in RE.  nT/RE -> nA/m^2 contributes 1/(mu0*RE).
     jy=(np.gradient(bx,z,axis=0)-np.gradient(bz,x,axis=1))/(MU0*RE_METERS)
-    earth=np.hypot(z[:,None],x[None,:])<2.0
-    vmax=float(np.percentile(np.abs(jy[~earth]),99.0))
+    # The internal centered-dipole/IGRF-like contribution is not a
+    # magnetospheric current system.  Exclude the near-Earth volume entirely.
+    earth=np.hypot(z[:,None],x[None,:])<5.0
+    signal=(np.abs(jy)>0)&~earth
+    vmax=float(np.percentile(np.abs(jy[signal]),99.0))
     jy[earth]=0
     return dict(x=np.round(x,5).tolist(),z=np.round(z,5).tolist(),
                 jy=np.round(jy,5).tolist(),units='nA/m^2',vmax=round(vmax,5),
-                definition='Jy = (dBx/dz - dBz/dx) / mu0; B=0 outside T96 magnetopause')
+                definition='Jy = (dBx/dz - dBz/dx) / mu0; B=0 outside T96 magnetopause; r<5 RE excluded')
+
+def magnetopause_current_zero_crossings(current, magnetopause):
+    """Locate dayside Chapman-Ferraro Jy reversals on the X-Z cut."""
+    x=np.asarray(current['x']);z=np.asarray(current['z']);jy=np.asarray(current['jy'])
+    center=np.asarray(magnetopause['center']);axes=np.asarray(magnetopause['axes'])
+    found={}
+    for hem in (-1,1):
+        keep=(hem*z>=4.)&(hem*z<=min(15.,.9*axes[2]))
+        zz=z[keep];values=[]
+        for zi in zz:
+            xb=center[0]+axes[0]*np.sqrt(max(0.,1-(zi/axes[2])**2))
+            # Sample just inside the boundary sheet; interpolation avoids
+            # locking the zero to a 0.25 RE pixel center.
+            values.append(np.interp(xb-.20,x,jy[np.argmin(np.abs(z-zi))]))
+        values=np.asarray(values)
+        crossings=np.where(values[:-1]*values[1:]<=0)[0]
+        assert len(crossings), (hem,'no magnetopause Jy reversal')
+        i=crossings[np.argmin(np.abs(zz[crossings]-hem*9.))]
+        f=-values[i]/(values[i+1]-values[i])
+        z0=zz[i]+f*(zz[i+1]-zz[i])
+        x0=center[0]+axes[0]*np.sqrt(max(0.,1-(z0/axes[2])**2))
+        found[hem]=np.array([x0,0.,z0])
+    return found
 
 def generate(name, pressure, dst, by, bz, tilt):
     ps = np.deg2rad(tilt)
@@ -77,7 +104,13 @@ def generate(name, pressure, dst, by, bz, tilt):
         for mlt in range(0,24,3):
             p,stop=trace(lat,mlt)
             add('field',p,'T96 magnetic field line',termination=stop)
-    magnetopause,extra=boundary_systems(pressure,tilt)
+    # Build geometry first, then use the same X-Z Jy diagnostic shown in the
+    # browser to anchor the Chapman-Ferraro cusp reversal points.
+    magnetopause,_=boundary_systems(pressure,tilt,geometry_only=True)
+    current_xz=current_density_xz(field,magnetopause)
+    cusp_points=magnetopause_current_zero_crossings(current_xz,magnetopause)
+    magnetopause,extra=boundary_systems(pressure,tilt,cusp_points=cusp_points)
+    magnetopause['current_zero_crossings']={str(h):np.round(p,6).tolist() for h,p in cusp_points.items()}
     bc=np.asarray(magnetopause['center']);ba=np.asarray(magnetopause['axes'])
     def smooth_route(way, samples=241):
         """Round a schematic circuit without moving its physical waypoints."""
@@ -109,10 +142,10 @@ def generate(name, pressure, dst, by, bz, tilt):
                     assert stop=='equator', (name,hem,region,mlt,stop)
                     legs[region,side]=p
                     upward=(region=='r1')==(side=='dusk')
-                    # One representative pair is intentional: both Figure 4
-                    # alternatives attach to the same R1 endpoints, and every
-                    # displayed FAC remains part of a complete circuit.
-                    add(region,p if upward else p[::-1],f'{region.upper()} · {side} · '+('upward' if upward else 'downward')+' conventional current',termination=stop)
+                    # R1 is drawn below as one continuous far-tail circuit that
+                    # reaches the ionosphere itself.  R2 retains its T96 FACs.
+                    if region=='r2':
+                        add(region,p if upward else p[::-1],f'{region.upper()} · {side} · '+('upward' if upward else 'downward')+' conventional current',termination=stop)
             # Smooth radial/polar interpolation in SM equatorial plane.
             for kind,start,end,via in [('partial',legs['r2','dawn'][-1],legs['r2','dusk'][-1],'night')]:
                 a,b=rot.T@start,rot.T@end
@@ -122,45 +155,34 @@ def generate(name, pressure, dst, by, bz, tilt):
                 rr=(1-t)*np.linalg.norm(a)+t*np.linalg.norm(b)
                 pts=np.column_stack([rr*np.cos(th),rr*np.sin(th),np.zeros(len(t))])@rot.T
                 add(kind,pts,'Schematic partial ring-current closure')
-            # Figure 4 is drawn as two *alternative complete magnetospheric
-            # branches from the same representative R1 sheet*.
+            # Retain the Figure 4 far-tail route only.  It is a single complete
+            # R1 path between ionospheric footpoints, with no separate FAC seam
+            # at the magnetic equator and no imposed dawn/dusk displacement in
+            # the magnetosphere.  Small mirrored Y offsets near Earth make the
+            # two ionospheric connections readable; both sweep tailward equally.
             if dusk==18:
-                # Dusk R1 is upward (Earth -> magnetosphere), dawn R1 downward.
-                start,end=legs['r1','dusk'][-1],legs['r1','dawn'][-1]
+                dusk_foot=legs['r1','dusk'][0]
+                dawn_foot=legs['r1','dawn'][0]
+                def top(x,scale=.985): return mp_point(x,np.pi/2,hem,scale)
+                far=[dusk_foot,[-1.8,.45*dusk_foot[1],hem*2.2],
+                     [-4.5,0.,hem*.85],[-10.,0.,hem*.22],[-18.,0.,hem*.12],
+                     [-24.,0.,0.],[-24.,0.,hem*6.],top(-24.)]
+                far += [top(x) for x in (-20.,-16.,-12.,-8.,-4.)]
+                far += [[-2.8,0.,hem*4.2],[-1.8,.45*dawn_foot[1],hem*2.2],dawn_foot]
+                route=smooth_route(far,321)
+                route[route[:,0]<-3.,1]=0. # exact noon-midnight symmetry outside the entry bends
+                add('r1tail',route,
+                    'R1 Figure 4 far-tail route: ionosphere to plasma sheet, around the far tail, boundary return to ionosphere',
+                    hemisphere=hem,segment='ionosphere-plasma-sheet-far-tail-boundary-ionosphere')
 
-                # Short/open branch: each R1 leg reaches the dayside boundary;
-                # the connection between them lies directly on the high-latitude
-                # magnetopause, as in the small loop at the left of Figure 4.
-                direct=[start,mp_point(5.,.72,hem),mp_point(6.,np.pi/2,hem),
-                        mp_point(5.,np.pi-.72,hem),end]
-                add('r1dayside',smooth_route(direct),
-                    'R1 Figure 4 route: direct closure through the dayside magnetopause / solar-wind generator',
-                    hemisphere=hem,segment='direct-to-magnetopause')
-
-                # Long/closed branch: current first runs antisunward in the
-                # near-equatorial plasma sheet, turns around the far-tail edge,
-                # and only then returns earthward on the high-latitude boundary.
-                # This is deliberately not a Y-directed bridge at one X.
-                plasma_y=.72*start[1]
-                far=[start,[-10.,plasma_y,hem*.25],[-18.,plasma_y*.82,hem*.20],
-                     mp_point(-24.,0.,hem)]
-                far += [mp_point(-24.,p,hem) for p in (.35,.75,1.15,1.55,1.95,2.30)]
-                far += [mp_point(x,p,hem) for x,p in [(-20.,2.30),(-16.,2.27),
-                                                       (-12.,2.23),(-8.,2.18)]]
-                far += [[-6.,.90*end[1],hem*7.],end]
-                add('r1tail',smooth_route(far,321),
-                    'R1 Figure 4 route: tailward in the plasma sheet, around the far tail, earthward on the magnetopause',
-                    hemisphere=hem,segment='far-tail-plasma-sheet-and-boundary-return')
-
-                # Shared ionospheric part of either alternative circuit.
-                dawn_foot=legs['r1','dawn'][0];dusk_foot=legs['r1','dusk'][0]
+                # Ionospheric closure of the single far-tail R1 circuit.
                 pole=hem*axis*1.02;cap=[]
                 for a,b in [(dawn_foot,pole),(pole,dusk_foot)]:
                     for tt in np.linspace(0,1,45,endpoint=False):
                         q=(1-tt)*a+tt*b;cap.append(1.02*q/np.linalg.norm(q))
                 cap.append(dusk_foot)
-                add('r1pedersen',cap,'Shared ionospheric closure of the two Figure 4 R1 alternatives: dawn to dusk',
-                    hemisphere=hem,segment='shared-ionospheric-closure')
+                add('r1pedersen',cap,'R1 ionospheric closure: dawn to dusk',
+                    hemisphere=hem,segment='ionospheric-closure')
             for mlt,l0,l1 in [(dawn,70,63),(dusk,63,70)]:
                 add('pedersen',[seed(hem*l,mlt) for l in np.linspace(l0,l1,35)],'Ionospheric Pedersen closure (schematic)')
     # Equivalent substorm wedge: upward west/premidnight, downward east/
@@ -199,7 +221,7 @@ def generate(name, pressure, dst, by, bz, tilt):
                 'Cross-tail current with Chapman-Ferraro magnetopause return')
     paths.extend(extra)
     return dict(name=name,pressure=pressure,dst=dst,by=by,bz=bz,tilt=tilt,
-                paths=paths,magnetopause=magnetopause,current_density_xz=current_density_xz(field,magnetopause))
+                paths=paths,magnetopause=magnetopause,current_density_xz=current_xz)
 
 if __name__=='__main__':
     result={'model':'T96 external + 30500 nT centered dipole', 'coordinates':'GSM', 'units':'Earth radii', 'geopack':importlib.metadata.version('geopack'), 'presets':[]}
