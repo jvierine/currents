@@ -10,7 +10,11 @@ const url=process.env.CURRENTS_URL||'http://127.0.0.1:8163/';
    page.on('pageerror',e=>errors.push(String(e)));
    await page.goto(url);
    await page.waitForFunction(()=>document.querySelector('#selected').textContent.includes('illustrative current'));
-   assert(await page.getByText('R1 FAC continues through a schematic',{exact:false}).count()>0);
+   assert(await page.getByText('R1 has two distinct magnetospheric routes',{exact:false}).count()>0);
+   for(const layer of ['Region 1 FAC','R1 · dayside boundary path (opposes CF)','R1 · far-tail plasma-sheet path','R1 · polar-cap Pedersen closure']){
+    await page.getByLabel(layer,{exact:true}).uncheck();
+    await page.getByLabel(layer,{exact:true}).check();
+   }
    await page.getByLabel('Tail + Chapman-Ferraro boundary return',{exact:true}).uncheck();
    await page.getByLabel('Tail + Chapman-Ferraro boundary return',{exact:true}).check();
    await page.getByLabel('BCBF · plasma flow, not current',{exact:true}).uncheck();

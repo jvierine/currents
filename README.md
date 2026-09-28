@@ -23,9 +23,16 @@ measurements are plotted.
 Included: R1/R2 FAC in both hemispheres, Pedersen connectors, partial/symmetric
 ring current, and cross-tail current whose return is on the T96 magnetopause.
 Chapman-Ferraro shielding and the tail return share one boundary-current layer.
-R1 no longer disappears at the magnetic equator: its FAC endpoints join a
-high-latitude boundary/plasma-sheet generator route. That perpendicular route
-is explicitly schematic because tracing B does not uniquely solve it. See
+R1 no longer disappears at the magnetic equator. Following Figure 4 of
+Ganushkina et al. (2018), it has two explicitly labeled magnetospheric paths:
+(1) a dayside/open-field connection directly to the magnetopause solar-wind
+generator and (2) a closed-field nightside connection through the boundary
+layer and far-tail plasma sheet. Both complete through dawn-to-dusk Pedersen
+current across the ionospheric polar cap. These perpendicular paths are
+schematic because tracing B does not uniquely solve them. On the dayside
+boundary, R1 runs dusk-to-dawn, opposite the local dawn-to-dusk
+Chapman-Ferraro shielding current; the contributions subtract rather than
+simply adding into one current. See
 https://doi.org/10.1002/2017RG000590.
 Included additionally: an equivalent substorm wedge in both hemispheres, with
 T96-traced upward premidnight and downward postmidnight FAC, a westward auroral

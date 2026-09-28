@@ -8,6 +8,7 @@ import importlib.metadata
 import numpy as np
 import h5py
 from scipy.integrate import solve_ivp
+from scipy.interpolate import PchipInterpolator
 from geopack import t96
 from boundary_systems import boundary_systems
 
@@ -100,24 +101,47 @@ def generate(name, pressure, dst, by, bz, tilt):
                 pts=np.column_stack([rr*np.cos(th),rr*np.sin(th),np.zeros(len(t))])@rot.T
                 add(kind,pts,'Schematic partial ring-current closure')
             # Dusk R1 is upward (Earth -> magnetosphere), dawn R1 downward.
-            # Join those endpoints through a high-latitude tail/boundary route.
+            # Ganushkina et al. Fig. 4 shows two distinct magnetospheric paths:
+            # direct dayside/open-field coupling to the magnetopause/solar-wind
+            # generator, and nightside closure through the far-tail plasma sheet.
             start,end=legs['r1','dusk'][-1],legs['r1','dawn'][-1]
-            xouter=min(-12.,start[0]-3.,end[0]-3.)
-            way=np.array([start,[xouter,start[1]*1.7,hem*4.5],
-                          [xouter-5.,0.,hem*7.0],
-                          [xouter,end[1]*1.7,hem*4.5],end])
-            # Keep the schematic generator path just inside the same boundary.
             bc=np.asarray(magnetopause['center']);ba=np.asarray(magnetopause['axes'])
-            for iw in range(1,len(way)-1):
-                q=(way[iw]-bc)/ba;u=np.linalg.norm(q)
-                if u>.94:way[iw]=bc+q/u*.94*ba
-            pieces=[]
-            for a,b in zip(way[:-1],way[1:]):
-                t=np.linspace(0,1,35,endpoint=False)[:,None]
-                pieces.append((1-t)*a+t*b)
-            add('r1',np.vstack(pieces+[end[None,:]]),
-                'R1 magnetospheric closure through boundary / plasma-sheet generator (schematic)',
-                hemisphere=hem,segment='magnetospheric-closure')
+            if dusk<=18:
+                xb=6.;section=np.sqrt(1-((xb-bc[0])/ba[0])**2)
+                yr,zr=ba[1]*section,ba[2]*section
+                way=np.array([start,[xb,.60*yr,hem*.80*zr],
+                              [xb,0.,hem*.98*zr],
+                              [xb,-.60*yr,hem*.80*zr],end])
+                kind='r1dayside';segment='dayside-magnetopause'
+                label='R1 dayside/open-field closure at magnetopause solar-wind generator'
+            else:
+                way=np.array([start,[-17.,max(8.,start[1]*1.25),hem*2.5],
+                              [-23.,8.,hem*.7],[-23.,-8.,hem*.7],
+                              [-17.,min(-8.,end[1]*1.25),hem*2.5],end])
+                kind='r1tail';segment='far-tail-plasma-sheet'
+                label='R1 nightside closure through boundary layer and far-tail plasma sheet'
+            # Shape-preserving interpolation rounds the schematic route without
+            # changing its endpoints or introducing spline loops.
+            s=np.r_[0,np.cumsum(np.linalg.norm(np.diff(way,axis=0),axis=1))]
+            ss=np.linspace(0,s[-1],181)
+            route=np.column_stack([PchipInterpolator(s,way[:,i])(ss) for i in range(3)])
+            # Keep interpolated routes inside or on the same magnetopause.
+            for ir in range(1,len(route)-1):
+                q=(route[ir]-bc)/ba;u=np.linalg.norm(q)
+                if u>1:route[ir]=bc+q/u*.995*ba
+            route[0]=start;route[-1]=end
+            add(kind,route,label,
+                hemisphere=hem,segment=segment)
+            # Current entering on the dawn side crosses the ionospheric polar
+            # cap and leaves on the dusk side, completing each R1 circuit.
+            dawn_foot=legs['r1','dawn'][0];dusk_foot=legs['r1','dusk'][0]
+            pole=hem*axis*1.02;cap=[]
+            for a,b in [(dawn_foot,pole),(pole,dusk_foot)]:
+                for tt in np.linspace(0,1,45,endpoint=False):
+                    q=(1-tt)*a+tt*b;cap.append(1.02*q/np.linalg.norm(q))
+            cap.append(dusk_foot)
+            add('r1pedersen',cap,'R1 ionospheric Pedersen closure across polar cap: dawn to dusk',
+                hemisphere=hem,segment='polar-cap-pedersen')
             for mlt,l0,l1 in [(dawn,70,63),(dusk,63,70)]:
                 add('pedersen',[seed(hem*l,mlt) for l in np.linspace(l0,l1,35)],'Ionospheric Pedersen closure (schematic)')
     # Equivalent substorm wedge: upward west/premidnight, downward east/

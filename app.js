@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
 const $=s=>document.querySelector(s), viewport=$('#viewport');
-const defs={field:['Magnetic field lines','#426477'],r1:['Region 1 FAC + closure','#ffb85b'],r2:['Region 2 FAC','#64dfce'],pedersen:['Pedersen closure','#f6e8a5'],partial:['Partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + Chapman-Ferraro boundary return','#73a9ff']};
+const defs={field:['Magnetic field lines','#426477'],r1:['Region 1 FAC','#ffb85b'],r1dayside:['R1 · dayside boundary path (opposes CF)','#ffd36e'],r1tail:['R1 · far-tail plasma-sheet path','#ff8f72'],r1pedersen:['R1 · polar-cap Pedersen closure','#fff0a8'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1/R2 Pedersen closure','#f6e8a5'],partial:['Partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + Chapman-Ferraro boundary return','#73a9ff']};
 defs.wedge=['Substorm wedge FAC + tail','#ff835c'];
 defs.electrojet=['Auroral westward electrojet','#a5f575'];
 defs.magnetopause=['Magnetopause surface','#76969f'];
@@ -62,12 +62,12 @@ function build(index){
     for(let j=0;j<columns-1;j+=8)groups.magnetopause.add(line(Array.from({length:rows},(_,i)=>points[i*columns+j]),defs.magnetopause[1],.22));
   }
   for(const path of p.paths){if(!defs[path.kind])continue;const color=defs[path.kind][1],pts=path.points.map(a=>new THREE.Vector3(...a));
-    const southern=path.hemisphere===-1||(['r1','r2','pedersen'].includes(path.kind)&&pts[Math.floor(pts.length/2)].z<0);
+    const southern=path.hemisphere===-1||(['r1','r1dayside','r1tail','r1pedersen','r2','pedersen'].includes(path.kind)&&pts[Math.floor(pts.length/2)].z<0);
     const object=line(path.points,color,path.kind==='field'?.30:.9);object.userData={label:path.label,south:southern};groups[path.kind].add(object);
     if(path.kind==='bcbf'){object.material.dispose();object.material=new THREE.LineDashedMaterial({color,dashSize:.022,gapSize:.014});object.computeLineDistances();}
     if(path.kind==='field')continue;pickables.push(object);
     const lengths=[0];for(let i=1;i<pts.length;i++)lengths.push(lengths[i-1]+pts[i].distanceTo(pts[i-1]));
-    const ionospheric=['pedersen','electrojet','bcbf'].includes(path.kind);
+    const ionospheric=['pedersen','r1pedersen','electrojet','bcbf'].includes(path.kind);
     const count=ionospheric?(path.kind==='pedersen'?1:3):Math.max(2,Math.ceil(lengths.at(-1)/3));
     for(let i=0;i<count;i++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(ionospheric?.018:.07,ionospheric?.07:.25,7),new THREE.MeshBasicMaterial({color}));arrow.userData.south=southern;groups[path.kind].add(arrow);animated.push({arrow,pts,lengths,offset:i/count});}
   }
@@ -83,4 +83,4 @@ const ray=new THREE.Raycaster();ray.params.Line.threshold=.12;let down;
 renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=renderer.domElement.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);const hit=ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible))[0];if(hit)$('#selected').textContent=hit.object.userData.label;});
 function resize(){const w=viewport.clientWidth,h=viewport.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();view('global');
 let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(playing)phase=(phase+dt*.045)%1;controls.update();for(const a of animated)positionArrow(a);for(const l of labels){const p=l.p.clone().project(camera);l.el.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;l.el.style.left=`${(p.x+1)*viewport.clientWidth/2}px`;l.el.style.top=`${(1-p.y)*viewport.clientHeight/2}px`;}renderer.render(scene,camera);requestAnimationFrame(frame);}requestAnimationFrame(frame);
-fetch('./traces.json?v=xz-current-1').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});
+fetch('./traces.json?v=r1-two-paths-1').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});
