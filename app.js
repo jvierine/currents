@@ -4,6 +4,7 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 const $=s=>document.querySelector(s), viewport=$('#viewport');
 const defs={field:['Magnetic field lines','#426477'],r1:['Region 1 FAC','#ff5b63'],r1boundary:['R1 · high-latitude boundary closure','#ff5b63'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1 ↔ R2 Pedersen closure','#f6e8a5'],partial:['Region 2 + partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + high-latitude Chapman-Ferraro return','#73a9ff']};
 defs.wedge=['Substorm wedge FAC + tail','#ff835c'];
+defs.chapman=['Chapman–Ferraro · dayside shielding','#39cd7d'];
 defs.electrojet=['Auroral westward electrojet','#a5f575'];
 defs.magnetopause=['Magnetopause surface','#76969f'];
 defs.bcbf=['BCBF · plasma flow, not current','#f4f8ff'];
@@ -68,8 +69,22 @@ function build(index){
     if(path.kind==='field')continue;pickables.push(object);
     const lengths=[0];for(let i=1;i<pts.length;i++)lengths.push(lengths[i-1]+pts[i].distanceTo(pts[i-1]));
     const ionospheric=['pedersen','electrojet','bcbf'].includes(path.kind);
-    const count=ionospheric?(path.kind==='pedersen'?1:3):Math.max(2,Math.ceil(lengths.at(-1)/3));
-    for(let i=0;i<count;i++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(ionospheric?.018:.07,ionospheric?.07:.25,7),new THREE.MeshBasicMaterial({color}));arrow.userData.south=southern;groups[path.kind].add(arrow);animated.push({arrow,pts,lengths,offset:i/count});}
+    const r1=['r1','r1boundary'].includes(path.kind);
+    const count=ionospheric?(path.kind==='pedersen'?1:3):Math.max(2,Math.ceil(lengths.at(-1)/(r1?8:5)));
+    for(let i=0;i<count;i++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(ionospheric?.018:r1?.24:.11,ionospheric?.07:r1?.8:.36,10),new THREE.MeshBasicMaterial({color}));arrow.userData.south=southern;groups[path.kind].add(arrow);animated.push({arrow,pts,lengths,offset:i/count});}
+  }
+  // A current sheet is visible as a ribbon between neighboring current
+  // paths, as in Ganushkina Figure 7. Width denotes schematic extent only.
+  for(const hem of [1,-1])for(const kind of ['r1','r1boundary','chapman'])for(const side of kind==='r1'?['dawn','dusk']:[undefined]){
+    const paths=p.paths.filter(q=>q.kind===kind&&(kind==='chapman'?Math.sign(q.points.reduce((s,v)=>s+v[2],0))===hem:q.hemisphere===hem)&&q.side===side).sort((a,b)=>(a.sheet_index??Math.max(...a.points.map(v=>hem*v[2])))-(b.sheet_index??Math.max(...b.points.map(v=>hem*v[2]))));
+    const rows=paths.map(q=>{
+      const pts=q.points.map(a=>new THREE.Vector3(...a)),s=[0];for(let i=1;i<pts.length;i++)s.push(s.at(-1)+pts[i].distanceTo(pts[i-1]));
+      return Array.from({length:201},(_,i)=>{const v=s.at(-1)*i/200;let k=1;while(k<s.length-1&&s[k]<v)k++;return pts[k-1].clone().lerp(pts[k],(v-s[k-1])/(s[k]-s[k-1]));});
+    });
+    const verts=rows.flat().flatMap(v=>v.toArray()),idx=[];
+    for(let i=0;i<rows.length-1;i++)for(let j=0;j<200;j++){const a=i*201+j,b=a+201;idx.push(a,b,a+1,b,b+1,a+1);}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);
+    const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:defs[kind][1],transparent:true,opacity:.38,side:THREE.DoubleSide,depthWrite:false}));mesh.userData.south=kind!=='chapman'&&hem<0;groups[kind].add(mesh);
   }
   buildCurrentPlane(p.current_density_xz,p.magnetopause);
   updateVisibility();$('#selected').textContent='T96 geometry + illustrative current circuits and plasma flows · click a path';
@@ -83,4 +98,5 @@ const ray=new THREE.Raycaster();ray.params.Line.threshold=.12;let down;
 renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=renderer.domElement.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);const hit=ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible))[0];if(hit)$('#selected').textContent=hit.object.userData.label;});
 function resize(){const w=viewport.clientWidth,h=viewport.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();view('global');
 let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(playing)phase=(phase+dt*.045)%1;controls.update();for(const a of animated)positionArrow(a);for(const l of labels){const p=l.p.clone().project(camera);l.el.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;l.el.style.left=`${(p.x+1)*viewport.clientWidth/2}px`;l.el.style.top=`${(1-p.y)*viewport.clientHeight/2}px`;}renderer.render(scene,camera);requestAnimationFrame(frame);}requestAnimationFrame(frame);
-fetch('./traces.json?v=cusp-jy-mask5-4').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});
+$('#figure7').onclick=()=>{for(const k of Object.keys(visible)){visible[k]=['r1','r1boundary','chapman','magnetopause'].includes(k);document.querySelector(`[data-layer="${k}"]`).checked=visible[k];}$('#south').checked=false;updateVisibility();view('global');controls.target.set(-5,0,0);camera.position.set(20,72,30);controls.update();$('#selected').textContent='Figure 7 comparison · red Region 1 sheet · green Chapman–Ferraro · northern hemisphere';};
+fetch('./traces.json?v=r1-sheet-2').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);if(new URLSearchParams(location.search).get('view')==='figure7')$('#figure7').click();}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});

@@ -135,16 +135,23 @@ def generate(name, pressure, dst, by, bz, tilt):
     # through the partial ring current.  Dawn/dusk Pedersen segments connect
     # the two FAC systems in the ionosphere (Ganushkina et al. 2018, Figs 4,7).
     for hem in [1,-1]:
-        for dusk in [18]:
+        for sheet_index,dusk in enumerate(np.linspace(16,20,5)):
             dawn=24-dusk
             legs={}
-            for region,lat in [('r1',70),('r2',63)]:
+            r1lat=74 if name=='quiet' else 72
+            for region,lat in [('r1',r1lat),('r2',63)]:
                 for side,mlt in [('dusk',dusk),('dawn',dawn)]:
                     p,stop=trace(hem*lat,mlt,True)
                     assert stop=='equator', (name,hem,region,mlt,stop)
+                    if region=='r1':
+                        # Keep only the rising, inner FAC leg. Extending it to
+                        # the equator creates the spurious equatorial dip and
+                        # upward hook absent from Ganushkina Figure 7.
+                        p=p[:np.argmax(np.linalg.norm(p,axis=1)>=4.)+1]
+                        stop='inner-magnetosphere'
                     legs[region,side]=p
                     upward=(region=='r1')==(side=='dusk')
-                    add(region,p if upward else p[::-1],f'{region.upper()} · {side} · '+('upward' if upward else 'downward')+' conventional current',termination=stop,hemisphere=hem,side=side)
+                    add(region,p if upward else p[::-1],f'{region.upper()} · {side} · '+('upward' if upward else 'downward')+' conventional current',termination=stop,hemisphere=hem,side=side,sheet_index=sheet_index)
             # Smooth radial/polar interpolation in SM equatorial plane.
             for kind,start,end,via in [('partial',legs['r2','dawn'][-1],legs['r2','dusk'][-1],'night')]:
                 a,b=rot.T@start,rot.T@end
@@ -153,26 +160,39 @@ def generate(name, pressure, dst, by, bz, tilt):
                 t=np.linspace(0,1,120); th=th0+(th1-th0)*t
                 rr=(1-t)*np.linalg.norm(a)+t*np.linalg.norm(b)
                 pts=np.column_stack([rr*np.cos(th),rr*np.sin(th),np.zeros(len(t))])@rot.T
-                add(kind,pts,'Schematic partial ring-current closure',hemisphere=hem,segment='region-2-partial-ring')
+                add(kind,pts,'Schematic partial ring-current closure',hemisphere=hem,segment='region-2-partial-ring',sheet_index=sheet_index)
             # Red Region 1 branch in Figure 7: from the upward dusk R1 leg,
             # through the high-latitude boundary-current region, to the
             # downward dawn R1 leg.  This is a schematic generator closure;
             # its endpoints are the T96-traced FAC endpoints and all interior
             # waypoints remain inside the same displayed magnetopause.
-            if dusk==18:
-                start,end=legs['r1','dusk'][-1],legs['r1','dawn'][-1]
-                route=[start,mp_point(-6.,.78,hem),mp_point(-2.,.84,hem),
-                       mp_point(3.,1.02,hem),mp_point(6.,np.pi/2,hem),
-                       mp_point(3.,np.pi-1.02,hem),mp_point(-2.,np.pi-.84,hem),
-                       mp_point(-6.,np.pi-.78,hem),end]
-                add('r1boundary',smooth_route(route,321),
-                    'Region 1 high-latitude boundary closure (red branch in Ganushkina et al. Figure 7)',
-                    hemisphere=hem,segment='high-latitude-boundary-closure')
-            for mlt,l0,l1 in [(dawn,70,63),(dusk,63,70)]:
+            # A ribbon of nested loops behind the cusp, passing across the
+            # high-latitude boundary from dusk to dawn. The active schematic
+            # expands sunward, as in Figure 7b. These are illustrative extents,
+            # not a fit to T96 current density or a field-line continuation.
+            xouter=np.linspace(-4 if name=='quiet' else 2,-13,5)[sheet_index]
+            phi=.60
+            def transition(side):
+                leg=legs['r1',side];start=leg[-1]
+                f=phi if side=='dusk' else np.pi-phi
+                end=mp_point(xouter,f,hem)
+                tangent=leg[-1]-leg[-2];tangent/=np.linalg.norm(tangent)
+                outer=np.array([0.,-np.sin(f),hem*np.cos(f)])
+                if side=='dawn':outer=-outer
+                length=np.linalg.norm(end-start)
+                control=[start,start+.30*length*tangent,end-.25*length*outer,end]
+                t=np.linspace(0,1,90)[:,None]
+                return (1-t)**3*control[0]+3*(1-t)**2*t*control[1]+3*(1-t)*t**2*control[2]+t**3*control[3]
+            arc=np.array([mp_point(xouter,f,hem) for f in np.linspace(phi,np.pi-phi,121)])
+            route=np.concatenate([transition('dusk'),arc[1:],transition('dawn')[-2::-1]])
+            add('r1boundary',route,
+                'Region 1 outer current sheet behind the cusp (schematic; Ganushkina et al. Figure 7)',
+                hemisphere=hem,segment='high-latitude-boundary-closure',sheet_index=sheet_index)
+            for mlt,l0,l1 in [(dawn,r1lat,63),(dusk,63,r1lat)]:
                 side='dawn' if mlt==dawn else 'dusk'
                 add('pedersen',[seed(hem*l,mlt) for l in np.linspace(l0,l1,35)],
                     f'{side.title()} Pedersen closure connecting Region 1 and Region 2',
-                    hemisphere=hem,side=side,segment='r1-r2-ionospheric-closure')
+                    hemisphere=hem,side=side,segment='r1-r2-ionospheric-closure',sheet_index=sheet_index)
     # Equivalent substorm wedge: upward west/premidnight, downward east/
     # postmidnight, westward ionospheric and eastward equatorial closure.
     # T96 only supplies the FAC geometry, not substorm dynamics or amplitudes.
@@ -207,6 +227,8 @@ def generate(name, pressure, dst, by, bz, tilt):
             back=np.column_stack([np.full(100,x),yr*np.cos(th),sign*zr*np.sin(th)])
             add('tail',np.concatenate([cross,back]),
                 'Cross-tail current with Chapman-Ferraro magnetopause return')
+    for path in extra:
+        if path['label'].startswith('Chapman-Ferraro /'):path['kind']='chapman'
     paths.extend(extra)
     return dict(name=name,pressure=pressure,dst=dst,by=by,bz=bz,tilt=tilt,
                 paths=paths,magnetopause=magnetopause,current_density_xz=current_xz)
@@ -227,7 +249,7 @@ if __name__=='__main__':
             for i,path in enumerate(preset['paths']):
                 ds=g.create_dataset(str(i),data=path['points'],compression='gzip')
                 for key in ['kind','label']:ds.attrs[key]=path[key]
-                for key in ['hemisphere','quantity','segment','termination']:
+                for key in ['hemisphere','quantity','segment','termination','side','sheet_index']:
                     if key in path:ds.attrs[key]=path[key]
             current=preset['current_density_xz']
             ds=g.create_dataset('current_density_xz',data=np.asarray(current['jy']),compression='gzip')

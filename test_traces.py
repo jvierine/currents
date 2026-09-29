@@ -34,7 +34,7 @@ for preset in d['presets']:
     assert gap<3e-6,gap
     assert max(np.linalg.norm(ends-start,axis=1).min() for start in starts)<3e-6
     for hem in [1,-1]:
-        r1paths=[p for p in preset['paths'] if p.get('hemisphere')==hem]
+        r1paths=[p for p in preset['paths'] if p.get('hemisphere')==hem and p.get('sheet_index')==2]
         assert not any(p['kind']=='r1pedersen' for p in r1paths)
         r1={p['side']:np.array(p['points']) for p in r1paths if p['kind']=='r1'}
         r2={p['side']:np.array(p['points']) for p in r1paths if p['kind']=='r2'}
@@ -49,7 +49,10 @@ for preset in d['presets']:
         for first,second in zip(sequence,sequence[1:]+sequence[:1]):
             assert np.linalg.norm(first[-1]-second[0])<3e-6
         assert boundary[0,1]>0 and boundary[-1,1]<0
-        assert np.max(boundary[:,0])>5 # dayside high-latitude Figure 7 branch
+        assert boundary[len(boundary)//2,0]<0 # behind cusp, not dayside arch
+        # Inner FACs must rise to the outer sheet without an equatorial dip.
+        assert np.min(hem*r1['dusk'][:,2])>.8
+        assert hem*r1['dusk'][-1,2]>3
         assert np.max(hem*boundary[:,2])>8
         wedge={p['segment']:np.array(p['points']) for p in preset['paths'] if p.get('hemisphere')==hem and p.get('segment') in ['upward','downward','electrojet','tail-closure']}
         assert set(wedge)=={'upward','downward','electrojet','tail-closure'}
@@ -77,7 +80,7 @@ for preset in d['presets']:
         if path['kind']=='r1boundary':
             u=np.sum(((p-center)/axes)**2,axis=1)
             assert np.max(u)<=1.001
-            assert np.max(p[:,0])>5 and np.max(path['hemisphere']*p[:,2])>8
+            assert np.max(path['hemisphere']*p[:,2])>8
     assert sum(p['label'].startswith('Chapman-Ferraro /') for p in preset['paths'])==6
     current=preset['current_density_xz'];x=np.asarray(current['x']);z=np.asarray(current['z']);jy=np.asarray(current['jy'])
     assert np.isfinite(jy).all() and current['units']=='nA/m^2'

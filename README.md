@@ -11,7 +11,8 @@ transport. Serve this folder over HTTP. No backend or API keys are required.
 T96 external field is added to a centered 30500 nT dipole. GSM in Earth radii.
 Integration uses adaptive RK45, rtol=2e-6, atol=1e-8, max step 0.16 RE.
 Background field traces terminate at Earth, 25 RE, or 85 RE arc length.
-FAC legs terminate at the magnetic equator and preserve their full 3-D geometry.
+R2 FAC legs terminate at the magnetic equator. R1 follows T96 only through
+the inner rising leg, to about 4 RE, then joins the schematic outer sheet.
 Seed positions, tilt and model inputs are in the generator, not inferred from data.
 The optional GSM X-Z diagnostic evaluates Jy=(dBx/dz-dBz/dx)/mu0 from the
 displayed model on Y=0. It is disabled by default and spans X=-27..13 RE and
@@ -36,6 +37,11 @@ dawn FAC -> partial ring -> R2 dusk FAC -> dusk Pedersen -> R1 dusk FAC.
 The perpendicular R1 branch is schematic because tracing B does not uniquely
 solve generator-region current closure. See
 https://doi.org/10.1002/2017RG000590.
+The red ribbon comprises five nested paths extending from the rising FAC
+legs to the outer high-latitude boundary behind the cusp. It never descends
+to the equator and bends back up. The quiet ribbon spans outer X=-4..-13 RE;
+the active ribbon expands to X=+2..-13 RE. These extents are illustrative.
+The Figure 7 button isolates red R1 and green Chapman-Ferraro sheets.
 Included additionally: an equivalent substorm wedge in both hemispheres, with
 T96-traced upward premidnight and downward postmidnight FAC, a westward auroral
 electrojet at 66 degrees magnetic latitude, and schematic eastward nightside
@@ -55,7 +61,8 @@ conventional-current arrows (Archer and Knudsen,
 https://doi.org/10.1002/2017JA024577). Illustrative 66.3-66.7 degree channels
 span 18-23 MLT westward and 1-6 MLT eastward in both hemispheres. This fixed
 geometry does not predict observed widths, speeds, electric fields or onset.
-The existing schematic R1/R2 footpoints remain at 70/63 degrees. BCBFs are
+The schematic R1 footpoints are at 74 degrees (quiet) and 72 (active),
+with R2 at 63 degrees. BCBFs are
 not identified with the substorm wedge or its electrojet.
 This is a global-system schematic, not a complete quantitative magnetosphere model.
 
