@@ -9,9 +9,9 @@ defs.electrojet=['Auroral westward electrojet','#a5f575'];
 defs.magnetopause=['Magnetopause surface','#76969f'];
 defs.bcbf=['BCBF · plasma flow, not current','#f4f8ff'];
 const scene=new THREE.Scene();scene.background=new THREE.Color('#061017');
-const camera=new THREE.PerspectiveCamera(40,1,.01,250);camera.up.set(0,0,1);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));viewport.append(renderer.domElement);
-const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.minDistance=1.4;controls.maxDistance=240;
+const camera=new THREE.PerspectiveCamera(40,1,.01,600);camera.up.set(0,0,1);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,matchMedia("(pointer: coarse)").matches?1.5:2));viewport.append(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.minDistance=1.4;controls.maxDistance=500;
 scene.add(new THREE.AmbientLight(0x92b4c7,1.2));const sun=new THREE.DirectionalLight(0xe8f4ff,2);sun.position.set(20,1,4);scene.add(sun);
 const earth=new THREE.Mesh(new THREE.SphereGeometry(1,64,40),new THREE.MeshPhongMaterial({color:0x153c50,shininess:18}));scene.add(earth);
 function line(points,color,opacity=.5){const g=new THREE.BufferGeometry().setFromPoints(points.map(p=>new THREE.Vector3(...p)));return new THREE.Line(g,new THREE.LineBasicMaterial({color,transparent:true,opacity}));}
@@ -23,8 +23,35 @@ function label(text,p,small=false){const el=document.createElement('span');el.cl
 for(const [text,p] of [['SUN · +X',[13,0,0]],['DUSK · +Y',[0,13,0]],['DAWN',[0,-13,0]],['NORTH · +Z',[0,0,11]],['TAIL',[-25,0,0]]]){scene.add(line([[0,0,0],p],0x426071,.23));label(text,p);}
 for(const r of [5,10,15,20]){const pts=[];for(let j=0;j<=160;j++)pts.push([r*Math.cos(j/160*2*Math.PI),r*Math.sin(j/160*2*Math.PI),0]);scene.add(line(pts,0x294551,.22));label(`${r} Rᴇ`,[-r,0,0],true);}
 const groups={},visible={};let animated=[],pickables=[],data,currentPlane,playing=!matchMedia('(prefers-reduced-motion: reduce)').matches,phase=0;
-for(const [kind,[name,color]] of Object.entries(defs)){const row=document.createElement('label');row.className='row';row.innerHTML=`<input type="checkbox" checked data-layer="${kind}"><i class="swatch" style="background:${color}"></i><span>${name}</span>`;$('#layers').append(row);visible[kind]=true;row.querySelector('input').addEventListener('change',e=>{visible[kind]=e.target.checked;updateVisibility();});}
-function updateVisibility(){for(const [kind,g] of Object.entries(groups)){g.visible=visible[kind];for(const o of g.children)if(o.userData.south)o.visible=$('#south').checked;}}
+const families=[
+ ['r1','Region 1',['r1','r1boundary']],['r2','Region 2 / partial ring',['r2','partial']],
+ ['pedersen','Pedersen closure',['pedersen']],['ring','Ring current',['ring']],
+ ['tail','Tail current',['tail']],['chapman','Chapman–Ferraro',['chapman']],
+ ['wedge','Substorm wedge',['wedge']],['electrojet','Auroral electrojet',['electrojet']],
+ ['field','Magnetic field lines',['field']],['magnetopause','Magnetopause surface',['magnetopause']],
+ ['bcbf','BCBF · plasma flow',['bcbf']]
+];
+for(const kind of Object.keys(defs))visible[kind]=true;
+for(const [kind,name,members] of families){
+ const reference=['field','magnetopause','bcbf'].includes(kind),color=defs[kind][1];
+ const row=document.createElement('label');row.className='row';
+ row.innerHTML='<input type="checkbox" checked data-layer="'+kind+'"><i class="swatch" style="background:'+color+'"></i><span>'+name+'</span>';
+ $(reference?'#reference-layers':'#layers').append(row);
+ row.querySelector('input').addEventListener('change',e=>{for(const member of members)visible[member]=e.target.checked;updateVisibility();});
+ if(!reference){const item=document.createElement('span');item.dataset.legend=kind;item.innerHTML='<i style="background:'+color+'"></i>'+name;$('#legend').append(item);}
+}
+function updateVisibility(){
+ for(const [kind,g] of Object.entries(groups)){g.visible=visible[kind];for(const o of g.children)if(o.userData.south)o.visible=$('#south').checked;}
+ for(const [kind,,members] of families){
+  const input=document.querySelector('[data-layer="'+kind+'"]'),count=members.filter(k=>visible[k]).length;
+  input.checked=count>0;input.indeterminate=count>0&&count<members.length;
+  document.querySelector('[data-legend="'+kind+'"]')?.classList.toggle('inactive',count===0);
+ }
+}
+function setPanel(open){$('#settings').hidden=!open;$('#gear').setAttribute('aria-expanded',String(open));}
+$('#gear').onclick=()=>setPanel($('#settings').hidden);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){setPanel(false);$('#gear').focus();}});
+document.addEventListener('pointerdown',e=>{if(!$('#settings').contains(e.target)&&!$('#gear').contains(e.target))setPanel(false);});
 $('#south').addEventListener('change',updateVisibility);
 function seismic(t){
   t=Math.max(-1,Math.min(1,t));
@@ -91,12 +118,10 @@ function build(index){
 }
 const up=new THREE.Vector3(0,1,0),direction=new THREE.Vector3();
 function positionArrow(a){const s=((phase+a.offset)%1)*a.lengths.at(-1);let lo=0,hi=a.lengths.length-1;while(hi-lo>1){const mid=(lo+hi)>>1;if(a.lengths[mid]<s)lo=mid;else hi=mid;}const t=(s-a.lengths[lo])/(a.lengths[hi]-a.lengths[lo]||1);a.arrow.position.lerpVectors(a.pts[lo],a.pts[hi],t);direction.subVectors(a.pts[hi],a.pts[lo]).normalize();a.arrow.quaternion.setFromUnitVectors(up,direction);const scale=Math.min(1,Math.max(.12,a.arrow.position.length()/3));a.arrow.scale.setScalar(scale);}
-function view(name){const mobile=innerWidth<760;const settings={global:[[-5,0,0],[24,32,23]],north:[[0,0,.3],[.7,-1.4,4.5]],side:[[-5,0,0],[0,-42,3]],tail:[[-12,0,0],[-37,-26,17]]};const [target,pos]=settings[name];controls.target.set(...target);camera.position.set(...pos);if(name==='global'){const aspect=mobile?innerWidth/innerHeight:Math.max(300,innerWidth-320)/innerHeight;const half=Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(1,aspect));camera.position.sub(controls.target).normalize().multiplyScalar(33/Math.sin(half)).add(controls.target);}controls.update();for(const b of document.querySelectorAll('[data-view]'))b.setAttribute('aria-pressed',String(b.dataset.view===name));}
+function view(name){const settings={global:[[-5,0,0],[24,32,23]],north:[[0,0,.3],[.7,-1.4,4.5]],side:[[-5,0,0],[0,-42,3]],tail:[[-12,0,0],[-37,-26,17]]};const [target,pos]=settings[name];controls.target.set(...target);camera.position.set(...pos);if(name==='global'){const aspect=viewport.clientWidth/viewport.clientHeight;const half=Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(1,aspect));camera.position.sub(controls.target).normalize().multiplyScalar(33/Math.sin(half)).add(controls.target);}controls.update();for(const b of document.querySelectorAll('[data-view]'))b.setAttribute('aria-pressed',String(b.dataset.view===name));}
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>view(b.dataset.view)));$('#reset').onclick=()=>view('global');$('#preset').onchange=e=>build(+e.target.value);
 function playLabel(){$('#play').textContent=playing?'Pause arrows':'Play arrows';}playLabel();$('#play').onclick=()=>{playing=!playing;playLabel();};
-const ray=new THREE.Raycaster();ray.params.Line.threshold=.12;let down;
-renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=renderer.domElement.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1),camera);const hit=ray.intersectObjects(pickables.filter(o=>o.visible&&o.parent.visible))[0];if(hit)$('#selected').textContent=hit.object.userData.label;});
-function resize(){const w=viewport.clientWidth,h=viewport.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();view('global');
+function resize(){const w=viewport.clientWidth,h=viewport.clientHeight,oldAspect=camera.aspect;renderer.setSize(w,h);camera.aspect=w/h;if(oldAspect!==1){const oldScale=Math.min(1,oldAspect),newScale=Math.min(1,camera.aspect);camera.position.sub(controls.target).multiplyScalar(oldScale/newScale).add(controls.target);}camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();view('global');
 let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(playing)phase=(phase+dt*.045)%1;controls.update();for(const a of animated)positionArrow(a);for(const l of labels){const p=l.p.clone().project(camera);l.el.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;l.el.style.left=`${(p.x+1)*viewport.clientWidth/2}px`;l.el.style.top=`${(1-p.y)*viewport.clientHeight/2}px`;}renderer.render(scene,camera);requestAnimationFrame(frame);}requestAnimationFrame(frame);
-$('#figure7').onclick=()=>{for(const k of Object.keys(visible)){visible[k]=['r1','r1boundary','chapman','magnetopause'].includes(k);document.querySelector(`[data-layer="${k}"]`).checked=visible[k];}$('#south').checked=false;updateVisibility();view('global');controls.target.set(-5,0,0);camera.position.set(20,72,30);controls.update();$('#selected').textContent='Figure 7 comparison · red Region 1 sheet · green Chapman–Ferraro · northern hemisphere';};
-fetch('./traces.json?v=r1-sheet-2').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);if(new URLSearchParams(location.search).get('view')==='figure7')$('#figure7').click();}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').classList.add('error');console.error(e);});
+$('#figure7').onclick=()=>{for(const k of Object.keys(visible)){visible[k]=['r1','r1boundary','chapman','magnetopause'].includes(k);}$('#south').checked=false;updateVisibility();view('global');controls.target.set(-5,0,0);camera.position.set(20,72,30).sub(controls.target).multiplyScalar(1/Math.min(1,camera.aspect)).add(controls.target);controls.update();$('#selected').textContent='Figure 7 comparison · red Region 1 sheet · green Chapman–Ferraro · northern hemisphere';};
+fetch('./traces.json?v=r1-sheet-2').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);if(new URLSearchParams(location.search).get('view')==='figure7')$('#figure7').click();}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').hidden=false;$('#selected').classList.add('error');console.error(e);});

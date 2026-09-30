@@ -10,15 +10,18 @@ const url=process.env.CURRENTS_URL||'http://127.0.0.1:8163/';
    page.on('pageerror',e=>errors.push(String(e)));
    await page.goto(url);
    await page.waitForFunction(()=>document.querySelector('#selected').textContent.includes('illustrative current'));
+   assert(await page.locator('#settings').isHidden());
+   await page.getByRole('button',{name:'Current display settings'}).click();
    assert(await page.getByText('Region 1 does not self-close across the polar cap',{exact:false}).count()>0);
-   for(const layer of ['Region 1 FAC','R1 · high-latitude boundary closure','R1 ↔ R2 Pedersen closure']){
+   for(const layer of ['Region 1','Region 2 / partial ring','Pedersen closure']){
     await page.getByLabel(layer,{exact:true}).uncheck();
     await page.getByLabel(layer,{exact:true}).check();
    }
-   await page.getByLabel('Tail + high-latitude Chapman-Ferraro return',{exact:true}).uncheck();
-   await page.getByLabel('Tail + high-latitude Chapman-Ferraro return',{exact:true}).check();
-   await page.getByLabel('BCBF · plasma flow, not current',{exact:true}).uncheck();
-   await page.getByLabel('BCBF · plasma flow, not current',{exact:true}).check();
+   await page.getByLabel('Tail current',{exact:true}).uncheck();
+   await page.getByLabel('Tail current',{exact:true}).check();
+   await page.getByText('Views & reference layers',{exact:true}).click();
+   await page.getByLabel('BCBF · plasma flow',{exact:true}).uncheck();
+   await page.getByLabel('BCBF · plasma flow',{exact:true}).check();
    for(const preset of ['0','1']){
     await page.locator('#preset').selectOption(preset);
     await page.getByRole('button',{name:'Global',exact:true}).click();
