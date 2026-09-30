@@ -193,25 +193,34 @@ def generate(name, pressure, dst, by, bz, tilt):
                 add('pedersen',[seed(hem*l,mlt) for l in np.linspace(l0,l1,35)],
                     f'{side.title()} Pedersen closure connecting Region 1 and Region 2',
                     hemisphere=hem,side=side,segment='r1-r2-ionospheric-closure',sheet_index=sheet_index)
-    # Equivalent substorm wedge: upward west/premidnight, downward east/
-    # postmidnight, westward ionospheric and eastward equatorial closure.
-    # T96 only supplies the FAC geometry, not substorm dynamics or amplitudes.
+    # Ganushkina et al. (2018), Figure 9b: a finite-width diversion of the
+    # dawn-to-dusk tail current, not an isolated reverse equatorial loop.
+    # T96 supplies only FAC geometry. Feeds and boundary return are schematic.
     for hem in [1,-1]:
-        west,sw=trace(hem*66,22,True)
-        east,se=trace(hem*66,2,True)
-        assert sw==se=='equator', (name,hem,sw,se)
-        meta=dict(hemisphere=hem)
-        add('wedge',west,'Substorm wedge: upward FAC, western / premidnight edge',segment='upward',**meta)
-        add('wedge',east[::-1],'Substorm wedge: downward FAC, eastern / postmidnight edge',segment='downward',**meta)
-        add('electrojet',[seed(hem*66,h) for h in np.linspace(26,22,100)],
-            'Substorm westward auroral electrojet (equivalent current closure)',segment='electrojet',**meta)
-        a,b=rot.T@west[-1],rot.T@east[-1]
-        t=np.linspace(0,1,120)
-        th0=np.arctan2(a[1],a[0]);th1=np.arctan2(b[1],b[0])
-        if th1<th0:th1+=2*np.pi
-        th=th0+(th1-th0)*t;rr=(1-t)*np.linalg.norm(a)+t*np.linalg.norm(b)
-        add('wedge',np.column_stack([rr*np.cos(th),rr*np.sin(th),np.zeros(len(t))])@rot.T,
-            'Substorm wedge: eastward equatorial closure (schematic)',segment='tail-closure',**meta)
+        for sheet_index,lat in enumerate(np.linspace(65.2,66.4,5)):
+            west,sw=trace(hem*lat,22,True)
+            east,se=trace(hem*lat,2,True)
+            assert sw==se=='equator', (name,hem,lat,sw,se)
+            meta=dict(hemisphere=hem,sheet_index=sheet_index,quantity='conventional-current')
+            add('wedge',west,'Substorm wedge: upward dusk / premidnight FAC',segment='upward',**meta)
+            add('wedge',east[::-1],'Substorm wedge: downward dawn / postmidnight FAC',segment='downward',**meta)
+            add('electrojet',[seed(hem*lat,h) for h in np.linspace(26,22,100)],
+                'Substorm wedge: westward auroral electrojet',segment='electrojet',**meta)
+            def flank(p,side):
+                q=p.copy();q[1]=side*ba[1]*np.sqrt(1-((q[0]-bc[0])/ba[0])**2-(q[2]/ba[2])**2)
+                return q
+            dusk,dawn=flank(west[-1],1),flank(east[-1],-1)
+            add('wedgetail',np.linspace(dawn,east[-1],80),
+                'Tail current feeding the downward SCW branch (+Y)',segment='dawn-feed',**meta)
+            add('wedgetail',np.linspace(west[-1],dusk,80),
+                'Tail current leaving the upward SCW branch (+Y)',segment='dusk-feed',**meta)
+            a0=np.arctan2(dusk[2]/ba[2],dusk[1]/ba[1]);a1=np.arctan2(dawn[2]/ba[2],dawn[1]/ba[1])
+            while hem*(a1-a0)<0:a1+=hem*2*np.pi
+            t=np.linspace(0,1,161);x=dusk[0]+t*(dawn[0]-dusk[0]);angle=a0+t*(a1-a0)
+            section=np.sqrt(1-((x-bc[0])/ba[0])**2)
+            back=np.column_stack([x,ba[1]*section*np.cos(angle),ba[2]*section*np.sin(angle)])
+            back[0]=dusk;back[-1]=dawn
+            add('wedgetail',back,'SCW tail-current magnetopause return (schematic)',segment='boundary-return',**meta)
     for radius in [3.5,4.3]:
         th=np.linspace(0,-2*np.pi,180)
         add('ring',np.column_stack([radius*np.cos(th),radius*np.sin(th),np.zeros(len(th))])@rot.T,'Symmetric westward ring current (schematic)')

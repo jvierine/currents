@@ -42,11 +42,18 @@ legs to the outer high-latitude boundary behind the cusp. It never descends
 to the equator and bends back up. The quiet ribbon spans outer X=-4..-13 RE;
 the active ribbon expands to X=+2..-13 RE. These extents are illustrative.
 The Figure 7 button isolates red R1 and green Chapman-Ferraro sheets.
-Included additionally: an equivalent substorm wedge in both hemispheres, with
-T96-traced upward premidnight and downward postmidnight FAC, a westward auroral
-electrojet at 66 degrees magnetic latitude, and schematic eastward nightside
-equatorial closure. It is switchable independently of R1/R2; neither preset
-predicts whether a substorm occurs. See https://doi.org/10.1007/s11214-014-0124-9.
+The substorm wedge follows Ganushkina et al. (2018), Figure 9b, as a diversion
+of the tail current through the ionosphere. Five neighboring T96 traces at
+65.2–66.4 degrees form pink FAC ribbons: downward dawn/postmidnight, westward
+auroral electrojet, upward dusk/premidnight. Blue tail-current feeders run
+dawn to dusk and join a magnetopause return. This replaces the former isolated
+reverse equatorial arc (a perturbation-loop depiction, not the figure's full
+diverted circuit). Tail connections and ribbon widths are schematic, not
+T96-derived current magnitudes. The wedge toggle includes its electrojet and
+blue feeds/return; Figure 9 in the view controls, or `?view=figure9`, highlights
+the system. `build_traces.py` generates all geometry in `traces.h5` and
+`traces.json`. Neither preset predicts a substorm.
+Reference: https://doi.org/10.1002/2017RG000590, section 4.3 and Figure 9.
 Omitted: general Hall electrojets, NBZ/cusp and time-dependent coupling.
 Chapman-Ferraro directions are evaluated on T96's pressure-scaled sigma=1.08
 magnetopause using K parallel to (B_inside - B_outside) cross outward normal.

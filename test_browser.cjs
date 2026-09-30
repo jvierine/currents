@@ -41,6 +41,11 @@ const url=process.env.CURRENTS_URL||'http://127.0.0.1:8163/';
    }
    await page.getByRole('button',{name:'Pause arrows',exact:true}).click();
    await page.getByRole('button',{name:'Play arrows',exact:true}).click();
+   await page.getByRole('button',{name:'Figure 9 · Substorm wedge',exact:true}).click();
+   assert(await page.getByLabel('Substorm wedge',{exact:true}).isChecked());
+   assert.equal(await page.getByLabel('Region 1',{exact:true}).isChecked(),false);
+   await page.getByLabel('Substorm wedge',{exact:true}).uncheck();
+   await page.getByLabel('Substorm wedge',{exact:true}).check();
    assert.deepEqual(errors,[]);
    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
    console.log('PASS',width,'presets, layers, hemisphere, animation, pause, layout');

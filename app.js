@@ -3,9 +3,10 @@ import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 
 const $=s=>document.querySelector(s), viewport=$('#viewport');
 const defs={field:['Magnetic field lines','#426477'],r1:['Region 1 FAC','#ff5b63'],r1boundary:['R1 · high-latitude boundary closure','#ff5b63'],r2:['Region 2 FAC','#64dfce'],pedersen:['R1 ↔ R2 Pedersen closure','#f6e8a5'],partial:['Region 2 + partial ring closure','#64dfce'],ring:['Symmetric ring current','#ef779d'],tail:['Tail + high-latitude Chapman-Ferraro return','#73a9ff']};
-defs.wedge=['Substorm wedge FAC + tail','#ff835c'];
+defs.wedge=['Substorm wedge','#f59ad3'];
+defs.wedgetail=['Diverted tail current','#73a9ff'];
 defs.chapman=['Chapman–Ferraro · dayside shielding','#39cd7d'];
-defs.electrojet=['Auroral westward electrojet','#a5f575'];
+defs.electrojet=['SCW westward electrojet','#f59ad3'];
 defs.magnetopause=['Magnetopause surface','#76969f'];
 defs.bcbf=['BCBF · plasma flow, not current','#f4f8ff'];
 const scene=new THREE.Scene();scene.background=new THREE.Color('#061017');
@@ -27,7 +28,7 @@ const families=[
  ['r1','Region 1',['r1','r1boundary']],['r2','Region 2 / partial ring',['r2','partial']],
  ['pedersen','Pedersen closure',['pedersen']],['ring','Ring current',['ring']],
  ['tail','Tail current',['tail']],['chapman','Chapman–Ferraro',['chapman']],
- ['wedge','Substorm wedge',['wedge']],['electrojet','Auroral electrojet',['electrojet']],
+ ['wedge','Substorm wedge',['wedge','wedgetail','electrojet']],
  ['field','Magnetic field lines',['field']],['magnetopause','Magnetopause surface',['magnetopause']],
  ['bcbf','BCBF · plasma flow',['bcbf']]
 ];
@@ -96,8 +97,8 @@ function build(index){
     if(path.kind==='field')continue;pickables.push(object);
     const lengths=[0];for(let i=1;i<pts.length;i++)lengths.push(lengths[i-1]+pts[i].distanceTo(pts[i-1]));
     const ionospheric=['pedersen','electrojet','bcbf'].includes(path.kind);
-    const r1=['r1','r1boundary'].includes(path.kind);
-    const count=ionospheric?(path.kind==='pedersen'?1:3):Math.max(2,Math.ceil(lengths.at(-1)/(r1?8:5)));
+    const r1=['r1','r1boundary','wedge'].includes(path.kind);
+    const count=path.segment==='boundary-return'?(path.sheet_index===2?4:0):ionospheric?(path.kind==='pedersen'?1:3):Math.max(2,Math.ceil(lengths.at(-1)/(r1?8:5)));
     for(let i=0;i<count;i++){const arrow=new THREE.Mesh(new THREE.ConeGeometry(ionospheric?.018:r1?.24:.11,ionospheric?.07:r1?.8:.36,10),new THREE.MeshBasicMaterial({color}));arrow.userData.south=southern;groups[path.kind].add(arrow);animated.push({arrow,pts,lengths,offset:i/count});}
   }
   // A current sheet is visible as a ribbon between neighboring current
@@ -113,6 +114,40 @@ function build(index){
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));g.setIndex(idx);
     const mesh=new THREE.Mesh(g,new THREE.MeshBasicMaterial({color:defs[kind][1],transparent:true,opacity:.38,side:THREE.DoubleSide,depthWrite:false}));mesh.userData.south=kind!=='chapman'&&hem<0;groups[kind].add(mesh);
   }
+  // Figure 9: pink FAC/ionospheric sheets attached to blue tail feeders.
+  // Ribbon width is schematic extent, not current magnitude.
+  for(const hem of [1,-1])for(const segment of ['upward','downward','electrojet','dawn-feed','dusk-feed']){
+    const paths=p.paths.filter(q=>q.hemisphere===hem&&q.segment===segment).sort((a,b)=>a.sheet_index-b.sheet_index);
+    if(paths.length<2)continue;
+    const rows=paths.map(q=>{
+      const curve=new THREE.CurvePath(),pts=q.points.map(v=>new THREE.Vector3(...v));
+      for(let i=1;i<pts.length;i++)curve.add(new THREE.LineCurve3(pts[i-1],pts[i]));
+      return Array.from({length:161},(_,i)=>curve.getPointAt(i/160));
+    });
+    const verts=rows.flat().flatMap(v=>v.toArray()),indices=[];
+    for(let i=0;i<rows.length-1;i++)for(let j=0;j<160;j++){const a=i*161+j,b=a+161;indices.push(a,b,a+1,b,b+1,a+1);}
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));geometry.setIndex(indices);
+    const kind=paths[0].kind,mesh=new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:defs[kind][1],transparent:true,opacity:.5,side:THREE.DoubleSide,depthWrite:false}));
+    mesh.userData.south=hem<0;groups[kind].add(mesh);
+  }
+  // The remaining equatorial tail sheet is blue, as in Figure 9. Its front
+  // edge joins the outermost feeder pair; the diversion leaves a central
+  // earthward notch. Boundary-return paths remain lines, not a huge ribbon.
+  const feeds=p.paths.filter(q=>q.kind==='wedgetail'&&q.hemisphere===1&&q.sheet_index===4);
+  const dawn=feeds.find(q=>q.segment==='dawn-feed'),dusk=feeds.find(q=>q.segment==='dusk-feed');
+  if(dawn&&dusk){
+    const front=[...dawn.points,...dusk.points],edgeX=Math.min(...front.map(v=>v[0]));
+    const back=p.paths.filter(q=>q.kind==='tail'&&q.points[0][0]<edgeX).filter((q,i)=>i%2===0).map(q=>q.points.slice(0,70));
+    const rows=[front,...back].map(points=>{
+      const curve=new THREE.CurvePath(),v=points.map(q=>new THREE.Vector3(...q));
+      for(let i=1;i<v.length;i++)if(v[i].distanceTo(v[i-1])>1e-8)curve.add(new THREE.LineCurve3(v[i-1],v[i]));
+      return Array.from({length:101},(_,i)=>curve.getPointAt(i/100));
+    });
+    const vertices=rows.flat().flatMap(v=>v.toArray()),indices=[];
+    for(let i=0;i<rows.length-1;i++)for(let j=0;j<100;j++){const a=i*101+j,b=a+101;indices.push(a,b,a+1,b,b+1,a+1);}
+    const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setIndex(indices);
+    groups.wedgetail.add(new THREE.Mesh(geometry,new THREE.MeshBasicMaterial({color:defs.tail[1],transparent:true,opacity:.25,side:THREE.DoubleSide,depthWrite:false})));
+  }
   buildCurrentPlane(p.current_density_xz,p.magnetopause);
   updateVisibility();$('#selected').textContent='T96 geometry + illustrative current circuits and plasma flows · click a path';
 }
@@ -124,4 +159,5 @@ function playLabel(){$('#play').textContent=playing?'Pause arrows':'Play arrows'
 function resize(){const w=viewport.clientWidth,h=viewport.clientHeight,oldAspect=camera.aspect;renderer.setSize(w,h);camera.aspect=w/h;if(oldAspect!==1){const oldScale=Math.min(1,oldAspect),newScale=Math.min(1,camera.aspect);camera.position.sub(controls.target).multiplyScalar(oldScale/newScale).add(controls.target);}camera.updateProjectionMatrix();}addEventListener('resize',resize);resize();view('global');
 let last=performance.now();function frame(now){const dt=Math.min((now-last)/1000,.05);last=now;if(playing)phase=(phase+dt*.045)%1;controls.update();for(const a of animated)positionArrow(a);for(const l of labels){const p=l.p.clone().project(camera);l.el.hidden=p.z>1||p.z< -1||Math.abs(p.x)>1||Math.abs(p.y)>1;l.el.style.left=`${(p.x+1)*viewport.clientWidth/2}px`;l.el.style.top=`${(1-p.y)*viewport.clientHeight/2}px`;}renderer.render(scene,camera);requestAnimationFrame(frame);}requestAnimationFrame(frame);
 $('#figure7').onclick=()=>{for(const k of Object.keys(visible)){visible[k]=['r1','r1boundary','chapman','magnetopause'].includes(k);}$('#south').checked=false;updateVisibility();view('global');controls.target.set(-5,0,0);camera.position.set(20,72,30).sub(controls.target).multiplyScalar(1/Math.min(1,camera.aspect)).add(controls.target);controls.update();$('#selected').textContent='Figure 7 comparison · red Region 1 sheet · green Chapman–Ferraro · northern hemisphere';};
-fetch('./traces.json?v=r1-sheet-2').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);if(new URLSearchParams(location.search).get('view')==='figure7')$('#figure7').click();}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').hidden=false;$('#selected').classList.add('error');console.error(e);});
+$('#figure9').onclick=()=>{for(const k of Object.keys(visible))visible[k]=['wedge','wedgetail','electrojet','tail','magnetopause'].includes(k);$('#south').checked=false;updateVisibility();controls.target.set(-8,0,0);camera.position.set(18,50,32).sub(controls.target).multiplyScalar(1/Math.min(1,camera.aspect)).add(controls.target);controls.update();};
+fetch('./traces.json?v=scw-figure9-1').then(r=>{if(!r.ok)throw Error(`Trace data HTTP ${r.status}`);return r.json();}).then(d=>{data=d;build(0);const requestedView=new URLSearchParams(location.search).get('view');if(['figure7','figure9'].includes(requestedView))$('#'+requestedView).click();}).catch(e=>{$('#selected').textContent=`Unable to load traces: ${e.message}`;$('#selected').hidden=false;$('#selected').classList.add('error');console.error(e);});

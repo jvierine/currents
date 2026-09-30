@@ -54,16 +54,22 @@ for preset in d['presets']:
         assert np.min(hem*r1['dusk'][:,2])>.8
         assert hem*r1['dusk'][-1,2]>3
         assert np.max(hem*boundary[:,2])>8
-        wedge={p['segment']:np.array(p['points']) for p in preset['paths'] if p.get('hemisphere')==hem and p.get('segment') in ['upward','downward','electrojet','tail-closure']}
-        assert set(wedge)=={'upward','downward','electrojet','tail-closure'}
-        up,down,jet,tail=[wedge[k] for k in ['upward','downward','electrojet','tail-closure']]
-        for end,start in [(up[-1],tail[0]),(tail[-1],down[0]),(down[-1],jet[0]),(jet[-1],up[0])]:
-            assert np.linalg.norm(end-start)<3e-6
-        assert np.linalg.norm(up[0])<np.linalg.norm(up[-1])
-        assert np.linalg.norm(down[0])>np.linalg.norm(down[-1])
-        assert jet[0,1]<0 and jet[-1,1]>0 # postmidnight to premidnight
-        assert np.max(np.abs(np.linalg.norm(jet,axis=1)-1.02))<2e-6
-        assert np.max(tail[:,0])<0 # nightside, never a dayside shortcut
+        for sheet_index in range(5):
+            wedge={p['segment']:np.array(p['points']) for p in preset['paths'] if p.get('hemisphere')==hem and p.get('sheet_index')==sheet_index and p['kind'] in ['wedge','wedgetail','electrojet']}
+            sequence=['dawn-feed','downward','electrojet','upward','dusk-feed','boundary-return']
+            assert set(wedge)==set(sequence)
+            for first,second in zip(sequence,sequence[1:]+sequence[:1]):
+                assert np.linalg.norm(wedge[first][-1]-wedge[second][0])<3e-6
+            up,down,jet=[wedge[k] for k in ['upward','downward','electrojet']]
+            assert np.linalg.norm(up[0])<np.linalg.norm(up[-1])
+            assert np.linalg.norm(down[0])>np.linalg.norm(down[-1])
+            assert jet[0,1]<0 and jet[-1,1]>0
+            assert np.max(np.abs(np.linalg.norm(jet,axis=1)-1.02))<2e-6
+            for key in ['dawn-feed','dusk-feed']:
+                assert np.all(np.diff(wedge[key][:,1])>0), 'Tail feeders must flow dawn-to-dusk'
+                assert np.max(wedge[key][:,0])<0
+            assert np.max(hem*wedge['boundary-return'][:,2])>8
+        assert not any(p.get('segment')=='tail-closure' for p in preset['paths'])
     boundary=preset['magnetopause'];center=np.array(boundary['center']);axes=np.array(boundary['axes'])
     for path in preset['paths']:
         p=np.array(path['points'])
