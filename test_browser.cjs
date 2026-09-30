@@ -10,6 +10,7 @@ const url=process.env.CURRENTS_URL||'http://127.0.0.1:8163/';
    page.on('pageerror',e=>errors.push(String(e)));
    await page.goto(url);
    await page.waitForFunction(()=>document.querySelector('#selected').textContent.includes('illustrative current'));
+   assert.equal(await page.getByRole('link',{name:'Ganushkina et al., 2018',exact:true}).count(),1);
    assert(await page.locator('#settings').isHidden());
    await page.getByRole('button',{name:'Current display settings'}).click();
    assert(await page.getByText('Region 1 does not self-close across the polar cap',{exact:false}).count()>0);

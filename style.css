@@ -14,7 +14,8 @@ summary{cursor:pointer;min-height:44px;padding:12px 0;color:#c9e2e7}
 .panel a{color:#7fe2d1}
 #current-colorbar{font-size:10px;display:flex;gap:5px;flex-wrap:wrap}
 #selected.error{position:absolute;z-index:6;left:20px;top:100px;max-width:85vw;background:#192027;padding:10px;color:#ffc1ac}
-footer span:last-child{display:none}
+footer{align-items:flex-end}
+footer>a{pointer-events:auto;white-space:nowrap}
 @media(max-width:600px){header .subtitle{font-size:11px}#legend{display:grid;grid-template-columns:repeat(2,max-content);column-gap:14px}}
 
 /* Phone shell: safe areas, browser chrome, touch targets, scrollable controls. */
@@ -26,5 +27,5 @@ header{left:max(20px,env(safe-area-inset-left));top:max(20px,env(safe-area-inset
 #time{min-height:44px;margin:3px 0;touch-action:pan-y}
 #legend{left:max(20px,env(safe-area-inset-left));bottom:calc(max(12px,env(safe-area-inset-bottom)) + 32px)}
 footer{left:max(20px,env(safe-area-inset-left));right:max(20px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom))}
-@media(max-width:600px){h1{font-size:clamp(20px,6vw,28px)}header p{max-width:240px}#legend{font-size:10px;gap:5px}footer{font-size:9px}.axis-label{font-size:8px}}
+@media(max-width:600px){h1{font-size:clamp(20px,6vw,28px)}header p{max-width:240px}#legend{font-size:10px;gap:5px}footer{font-size:9px}footer>span:first-child{display:none}.axis-label{font-size:8px}}
 @media(max-height:480px){header{top:max(10px,env(safe-area-inset-top))}h1{font-size:23px}header p{margin-top:3px}#legend{font-size:9px;gap:3px}#settings{top:64px;max-height:calc(100dvh - 78px - env(safe-area-inset-bottom))}}
